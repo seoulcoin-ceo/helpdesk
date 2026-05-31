@@ -15,63 +15,22 @@ if (toggle && nav) {
   });
 }
 
+// GitHub Pages에서는 서버 코드가 실행되지 않으므로 FormSubmit 표준 POST 방식으로 전송합니다.
+// fetch/ajax 방식은 일부 브라우저, 보안 확장 프로그램, CORS 정책에서 실패할 수 있어 사용하지 않습니다.
 (function () {
   const form = document.getElementById('contactForm');
-  const success = document.getElementById('formSuccess');
-  const status = document.getElementById('formStatus');
-  const writeAnother = document.getElementById('writeAnother');
-
   if (!form) return;
 
-  if (writeAnother) {
-    writeAnother.addEventListener('click', () => {
-      if (success) success.hidden = true;
-      form.hidden = false;
-      form.reset();
-      if (status) status.textContent = '';
-      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      const firstInput = form.querySelector('input:not(.hidden), select, textarea');
-      if (firstInput) firstInput.focus();
-    });
-  }
-
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-
+  form.addEventListener('submit', () => {
     const button = form.querySelector('button[type="submit"]');
-    const originalText = button ? button.textContent : '';
+    const status = document.getElementById('formStatus');
 
     if (button) {
-      button.disabled = true;
       button.textContent = '전송 중입니다...';
     }
-    if (status) status.textContent = '';
-
-    try {
-      const response = await fetch(form.action, {
-        method: 'POST',
-        body: new FormData(form),
-        headers: { 'Accept': 'application/json' }
-      });
-
-      if (response.ok) {
-        form.hidden = true;
-        if (success) success.hidden = false;
-        if (success) success.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } else {
-        const message = '문의 전송 중 오류가 발생했습니다. 처음 연결하는 경우 insung9908@naver.com 메일함에서 FormSubmit 인증 메일을 먼저 확인해 주세요. 계속 실패하면 010-8416-8623으로 연락해 주세요.';
-        if (status) status.textContent = message;
-        alert(message);
-      }
-    } catch (error) {
-      const message = '네트워크 오류로 문의를 전송하지 못했습니다. 인터넷 연결을 확인하거나 insung9908@naver.com 메일함의 FormSubmit 인증 여부를 확인해 주세요.';
-      if (status) status.textContent = message;
-      alert(message);
-    } finally {
-      if (button) {
-        button.disabled = false;
-        button.textContent = originalText;
-      }
+    if (status) {
+      status.textContent = '문의 내용을 전송하고 있습니다. 잠시만 기다려 주세요.';
     }
+    // preventDefault를 호출하지 않습니다. 브라우저가 FormSubmit으로 직접 제출합니다.
   });
 })();

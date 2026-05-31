@@ -53,3 +53,10 @@ GitHub Pages 업로드 방법
 - 수신 기준 이메일: insung9908@naver.com
 - 폼 action: https://formsubmit.co/ajax/insung9908@naver.com
 - 이메일 제목: 보험청구 안내 데스크 홈페이지 문의
+
+
+[v2 수정 사항]
+- FormSubmit 전송 방식을 ajax/fetch 방식에서 표준 HTML POST 방식으로 변경했습니다.
+- 네트워크 오류 또는 CORS 오류로 문의가 막히는 문제를 줄였습니다.
+- 문의 완료 후 https://seoulcoin-ceo.github.io/helpdesk/thanks.html 로 이동하도록 설정했습니다.
+- GitHub에는 index.html, script.js, thanks.html이 반드시 새 버전으로 덮어쓰기 되어야 합니다.
