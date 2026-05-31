@@ -462,12 +462,10 @@
           <p class="notice">※ 본 서비스는 보험금 청구 편의 지원 및 병원 운영 효율 개선을 위한 서비스입니다. 보험금 지급 여부를 보장하거나 의료적 판단을 대신하지 않습니다. 법률·보험 규정은 병원별 상황에 따라 별도 검토가 필요합니다.</p>
         </div>
 
-        <form class="contact-form" id="contactForm" name="hospital-inquiry" method="POST" action="https://formsubmit.co/insung9908@naver.com">
+        <form class="contact-form" id="contactForm" name="hospital-inquiry" method="POST" action="https://formspree.io/f/xykvdnvd">
           <input type="hidden" name="_subject" value="보험청구 안내 데스크 홈페이지 문의" />
-          <input type="hidden" name="_template" value="table" />
-          <input type="hidden" name="_captcha" value="false" />
-          <input type="hidden" name="_next" value="https://seoulcoin-ceo.github.io/helpdesk/thanks.html" />
-          <input type="text" name="_honey" class="hidden" tabindex="-1" autocomplete="off" />
+          <input type="hidden" name="_language" value="ko" />
+          <input type="text" name="_gotcha" class="hidden" tabindex="-1" autocomplete="off" />
           <label>병원명<input name="hospital" type="text" placeholder="예: ○○안과" required /></label>
           <label>담당자명<input name="name" type="text" placeholder="예: 홍길동" required /></label>
           <label>연락처<input name="phone" type="tel" placeholder="예: 010-0000-0000" required /></label>
@@ -477,7 +475,7 @@
           <label>문의 내용<textarea name="message" rows="5" placeholder="환자 보험 문의, 직원 업무 부담, 데스크 설치 희망 위치 등을 적어주세요."></textarea></label>
           <label class="check"><input name="privacy_agree" value="동의" type="checkbox" required /><span>개인정보 수집·이용에 동의합니다. <a href="privacy.html" target="_blank" rel="noopener">자세히 보기</a></span></label>
           <button class="btn primary full" type="submit">상담 문의 보내기</button>
-          <p class="form-help">제출 내용은 insung9908@naver.com 담당자 이메일로 전달됩니다. 첫 사용 시 네이버 메일함에서 FormSubmit 인증을 1회 완료해야 합니다.</p>
+          <p class="form-help">제출 내용은 Formspree endpoint를 통해 insung9908@naver.com 담당자 이메일로 전달됩니다. Formspree 대시보드에서 수신 메일과 제출 내역을 확인하세요.</p>
           <p class="form-help" id="formStatus" role="status" aria-live="polite"></p>
         </form>
 
