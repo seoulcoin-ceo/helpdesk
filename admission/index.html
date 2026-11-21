@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>입시나침반 | 내신·모의고사·수능 가채점 대학 추천과 입결 조회</title>
+  <meta name="description" content="고등학교 내신 등급, 모의고사, 수능 가채점 점수로 지원 가능한 대학·학과를 안정·적정·소신·상향으로 분류하고 최근 3개년 입시결과(컷)를 조회하세요." />
+  <meta property="og:title" content="입시나침반 | 내 점수로 갈 수 있는 대학 찾기" />
+  <meta property="og:description" content="내신·모의고사·수능 가채점 기반 대학/학과 추천과 과거 입결 조회" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232546d6'/%3E%3Cpath d='M16 6l4 10-4 10-4-10z' fill='%23fff'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a class="brand" href="#home" data-tab="home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="14"/><path d="M16 6l4 10-4 10-4-10z"/></svg>
+        </span>
+        <span><strong>입시나침반</strong><small>내 점수로 찾는 대학·학과</small></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-label="메뉴 열기" aria-expanded="false"><span></span><span></span><span></span></button>
+      <nav class="site-nav" aria-label="주요 메뉴">
+        <a href="#home" data-tab="home">홈</a>
+        <a href="#gpa" data-tab="gpa">내신 계산</a>
+        <a href="#exam" data-tab="exam">모의고사·수능</a>
+        <a href="#recommend" data-tab="recommend">대학 추천</a>
+        <a href="#cutoff" data-tab="cutoff">입결 조회</a>
+        <a href="#guide" data-tab="guide">입시 가이드</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="sample-banner" id="sampleBanner" hidden>
+    <div class="container">
+      <strong>샘플 데이터 안내</strong> 현재 표시되는 입결(컷) 수치는 기능 시연용 <b>예시 데이터</b>이며 실제 입시결과가 아닙니다.
+      실제 지원 판단은 <a href="https://www.adiga.kr" target="_blank" rel="noopener">대학어디가</a>와 각 대학 입학처 발표 자료로 확인하세요.
+    </div>
+  </div>
+
+  <main id="main">
+    <!-- 홈 -->
+    <section class="tab-panel" id="tab-home" data-panel="home">
+      <div class="hero">
+        <div class="container hero-inner">
+          <div>
+            <p class="eyebrow">2027·2028학년도 대입 준비</p>
+            <h1>내 성적으로 갈 수 있는<br />대학과 학과를 한눈에</h1>
+            <p class="lead">내신 등급, 모의고사 성적, 수능 가채점 점수를 입력하면 최근 3개년 입시결과와 비교해
+              <b class="t-safe">안정</b> · <b class="t-fit">적정</b> · <b class="t-reach">소신</b> · <b class="t-up">상향</b>으로 나눠 보여드립니다.</p>
+            <div class="hero-cta">
+              <a class="btn btn-primary" href="#gpa" data-tab="gpa">내신 입력하기</a>
+              <a class="btn btn-ghost" href="#exam" data-tab="exam">수능 가채점 입력</a>
+            </div>
+          </div>
+          <div class="hero-status card">
+            <h2>내 성적 요약</h2>
+            <dl class="summary-list">
+              <div><dt>내신 평균 (전과목)</dt><dd id="sumGpaAll">미입력</dd></div>
+              <div><dt>내신 평균 (국영수사과)</dt><dd id="sumGpaCore">미입력</dd></div>
+              <div><dt>시험</dt><dd id="sumExamName">미입력</dd></div>
+              <div><dt>국수탐 환산 백분위</dt><dd id="sumExamPct">미입력</dd></div>
+              <div><dt>영어 / 한국사</dt><dd id="sumExamEng">미입력</dd></div>
+            </dl>
+            <a class="btn btn-primary btn-block" href="#recommend" data-tab="recommend">추천 대학 보기</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="container section">
+        <div class="feature-grid">
+          <a class="feature card" href="#gpa" data-tab="gpa">
+            <span class="feature-num">01</span>
+            <h3>내신 등급 계산</h3>
+            <p>학기별 과목·단위수·등급을 넣으면 전과목/국영수사과/국영수과 평균을 자동 계산합니다. 9등급제·5등급제 모두 지원.</p>
+          </a>
+          <a class="feature card" href="#exam" data-tab="exam">
+            <span class="feature-num">02</span>
+            <h3>모의고사·수능 가채점</h3>
+            <p>3·6·9월 모의고사, 수능 가채점 백분위를 입력하세요. 영어·한국사는 원점수만 넣어도 등급이 자동 계산됩니다.</p>
+          </a>
+          <a class="feature card" href="#recommend" data-tab="recommend">
+            <span class="feature-num">03</span>
+            <h3>대학·학과 추천</h3>
+            <p>수시 학생부교과(내신)와 정시(수능) 각각에 대해 지원 가능 대학을 4단계로 분류합니다.</p>
+          </a>
+          <a class="feature card" href="#cutoff" data-tab="cutoff">
+            <span class="feature-num">04</span>
+            <h3>과거 입결(컷) 조회</h3>
+            <p>대학·학과별 최근 3개년 수시 50%/70% 컷, 정시 백분위 컷, 경쟁률 추이를 비교합니다.</p>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 내신 계산 -->
+    <section class="tab-panel" id="tab-gpa" data-panel="gpa" hidden>
+      <div class="container section">
+        <div class="section-head">
+          <h1>내신 등급 계산기</h1>
+          <p>평균 등급 = Σ(등급 × 단위수) ÷ Σ단위수. 진로선택(성취도 A/B/C) 과목은 대부분 대학에서 별도 반영하므로 제외하고 입력하세요.</p>
+        </div>
+
+        <div class="toolbar card">
+          <label>등급 체계
+            <select id="gradeSystem">
+              <option value="9">9등급제 (2026학년도 고3까지)</option>
+              <option value="5">5등급제 (2025년 고1부터)</option>
+            </select>
+          </label>
+          <div class="toolbar-actions">
+            <button class="btn btn-ghost" type="button" id="gpaAddRow">+ 과목 추가</button>
+            <button class="btn btn-ghost" type="button" id="gpaSample">예시 채우기</button>
+            <button class="btn btn-ghost danger" type="button" id="gpaClear">전체 삭제</button>
+          </div>
+        </div>
+
+        <div class="table-wrap card">
+          <table class="data-table gpa-table">
+            <thead>
+              <tr><th>학기</th><th>교과</th><th>과목명</th><th>단위수</th><th>등급</th><th class="sr">삭제</th></tr>
+            </thead>
+            <tbody id="gpaRows"></tbody>
+          </table>
+          <p class="empty" id="gpaEmpty">과목을 추가하거나 ‘예시 채우기’를 눌러보세요.</p>
+        </div>
+
+        <div class="stat-grid" id="gpaStats"></div>
+        <div class="card" id="gpaBySem"></div>
+      </div>
+    </section>
+
+    <!-- 모의고사/수능 -->
+    <section class="tab-panel" id="tab-exam" data-panel="exam" hidden>
+      <div class="container section">
+        <div class="section-head">
+          <h1>모의고사 · 수능 가채점 입력</h1>
+          <p>국어·수학·탐구는 성적표(또는 가채점 예상) <b>백분위</b>를, 영어·한국사는 <b>원점수</b>를 입력하세요. 절대평가 과목 등급은 자동 산출됩니다.</p>
+        </div>
+
+        <form class="card exam-form" id="examForm" novalidate>
+          <div class="form-row">
+            <label>시험
+              <select name="exam">
+                <option value="suneung">수능 가채점</option>
+                <option value="sep">9월 모의평가</option>
+                <option value="jun">6월 모의평가</option>
+                <option value="mar">3월 학력평가</option>
+                <option value="etc">기타 학력평가</option>
+              </select>
+            </label>
+            <label>계열
+              <select name="field">
+                <option value="인문">인문 (국어 비중↑)</option>
+                <option value="자연">자연 (수학 비중↑)</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="subject-grid">
+            <fieldset>
+              <legend>국어</legend>
+              <label>백분위 <input type="number" name="kor" min="0" max="100" step="1" inputmode="numeric" placeholder="예: 92" /></label>
+            </fieldset>
+            <fieldset>
+              <legend>수학</legend>
+              <label>백분위 <input type="number" name="math" min="0" max="100" step="1" inputmode="numeric" placeholder="예: 88" /></label>
+            </fieldset>
+            <fieldset>
+              <legend>영어 <small>(절대평가)</small></legend>
+              <label>원점수 <input type="number" name="eng" min="0" max="100" step="1" inputmode="numeric" placeholder="예: 85" /></label>
+              <output class="grade-out" id="engGrade">-</output>
+            </fieldset>
+            <fieldset>
+              <legend>한국사 <small>(절대평가)</small></legend>
+              <label>원점수 <input type="number" name="hist" min="0" max="50" step="1" inputmode="numeric" placeholder="예: 42" /></label>
+              <output class="grade-out" id="histGrade">-</output>
+            </fieldset>
+            <fieldset>
+              <legend>탐구 1</legend>
+              <label>과목 <input type="text" name="t1name" placeholder="예: 생활과윤리" /></label>
+              <label>백분위 <input type="number" name="t1" min="0" max="100" step="1" inputmode="numeric" placeholder="예: 90" /></label>
+            </fieldset>
+            <fieldset>
+              <legend>탐구 2</legend>
+              <label>과목 <input type="text" name="t2name" placeholder="예: 사회문화" /></label>
+              <label>백분위 <input type="number" name="t2" min="0" max="100" step="1" inputmode="numeric" placeholder="예: 86" /></label>
+            </fieldset>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" type="submit">저장하고 추천 보기</button>
+            <button class="btn btn-ghost" type="button" id="examReset">초기화</button>
+          </div>
+        </form>
+
+        <div class="stat-grid" id="examStats"></div>
+        <p class="note">환산 방식: 인문 = 국어 40% + 수학 30% + 탐구평균 30%, 자연 = 국어 30% + 수학 40% + 탐구평균 30% (백분위 기준), 영어 등급별 감점(1등급 0 · 2등급 −0.5 · 3등급 −1.5 · 4등급 −3 …), 한국사 5등급 이하 감점.
+          실제 대학별 환산식(표준점수·변환표준점수·가산점)과 다르므로 참고용입니다.</p>
+      </div>
+    </section>
+
+    <!-- 추천 -->
+    <section class="tab-panel" id="tab-recommend" data-panel="recommend" hidden>
+      <div class="container section">
+        <div class="section-head">
+          <h1>지원 가능 대학 · 학과 추천</h1>
+          <p>최근 3개년 70% 컷을 가중평균(최근년도 50%, 전년도 30%, 전전년도 20%)하여 내 성적과 비교합니다.</p>
+        </div>
+
+        <div class="toolbar card filters">
+          <div class="seg" role="tablist" aria-label="전형 선택">
+            <button type="button" class="seg-btn is-active" data-mode="susi" role="tab" aria-selected="true">수시 · 학생부교과</button>
+            <button type="button" class="seg-btn" data-mode="jungsi" role="tab" aria-selected="false">정시 · 수능</button>
+          </div>
+          <label>내신 기준
+            <select id="recGpaBasis">
+              <option value="core">국영수사과</option>
+              <option value="all">전과목</option>
+            </select>
+          </label>
+          <label>계열
+            <select id="recField"><option value="">전체</option><option>인문</option><option>자연</option></select>
+          </label>
+          <label>지역
+            <select id="recRegion"><option value="">전체</option></select>
+          </label>
+          <label>학과 검색
+            <input type="search" id="recMajor" placeholder="예: 컴퓨터, 경영" />
+          </label>
+        </div>
+
+        <div class="my-score card" id="recMyScore"></div>
+        <div class="legend">
+          <span><i class="dot safe"></i>안정 — 합격 가능성 높음</span>
+          <span><i class="dot fit"></i>적정 — 컷 근처, 해볼 만함</span>
+          <span><i class="dot reach"></i>소신 — 컷보다 조금 부족</span>
+          <span><i class="dot up"></i>상향 — 도전 지원</span>
+        </div>
+        <div class="rec-columns" id="recResults"></div>
+      </div>
+    </section>
+
+    <!-- 입결 조회 -->
+    <section class="tab-panel" id="tab-cutoff" data-panel="cutoff" hidden>
+      <div class="container section">
+        <div class="section-head">
+          <h1>과거 입시결과(컷) 조회</h1>
+          <p>행을 누르면 해당 학과의 3개년 추이를 볼 수 있습니다. 열 제목을 누르면 정렬됩니다.</p>
+        </div>
+        <div class="toolbar card filters">
+          <label>대학
+            <select id="cutUniv"><option value="">전체 대학</option></select>
+          </label>
+          <label>학과 검색
+            <input type="search" id="cutMajor" placeholder="예: 간호" />
+          </label>
+          <label>계열
+            <select id="cutField"><option value="">전체</option><option>인문</option><option>자연</option></select>
+          </label>
+          <label>입시년도
+            <select id="cutYear"></select>
+          </label>
+        </div>
+        <div class="table-wrap card">
+          <table class="data-table cut-table">
+            <thead>
+              <tr>
+                <th data-sort="univ">대학</th>
+                <th data-sort="major">학과</th>
+                <th data-sort="field">계열</th>
+                <th data-sort="susiRate" class="num">교과 경쟁률</th>
+                <th data-sort="susiCut50" class="num">교과 50%컷</th>
+                <th data-sort="susiCut70" class="num">교과 70%컷</th>
+                <th data-sort="jungsiGun">정시 군</th>
+                <th data-sort="jungsiRate" class="num">정시 경쟁률</th>
+                <th data-sort="jungsiCut70" class="num">정시 백분위 70%컷</th>
+              </tr>
+            </thead>
+            <tbody id="cutRows"></tbody>
+          </table>
+          <p class="empty" id="cutEmpty" hidden>조건에 맞는 결과가 없습니다.</p>
+        </div>
+        <p class="note" id="cutCount"></p>
+      </div>
+    </section>
+
+    <!-- 가이드 -->
+    <section class="tab-panel" id="tab-guide" data-panel="guide" hidden>
+      <div class="container section">
+        <div class="section-head">
+          <h1>입시 가이드</h1>
+          <p>전형별 핵심과 주요 일정. 세부 일정은 해마다 바뀌므로 반드시 공식 공지를 확인하세요.</p>
+        </div>
+
+        <div class="guide-grid">
+          <article class="card">
+            <h2>수시 전형 한눈에</h2>
+            <ul class="plain">
+              <li><b>학생부교과</b> — 내신 등급 중심. 일부 대학은 수능 최저학력기준 적용.</li>
+              <li><b>학생부종합</b> — 세특·창체·행특 등 학생부 전체를 정성 평가. 면접 포함 다수.</li>
+              <li><b>논술</b> — 논술 고사 성적 중심, 대부분 수능 최저 적용.</li>
+              <li><b>실기/특기자</b> — 예체능·어학 등 실기 및 실적 평가.</li>
+            </ul>
+            <p class="note">수시는 최대 6회 지원. 수시 최초합격 시(추가합격 포함) 정시 지원 불가.</p>
+          </article>
+          <article class="card">
+            <h2>정시 전형 한눈에</h2>
+            <ul class="plain">
+              <li><b>가·나·다군</b> 군별 1개씩 최대 3회 지원.</li>
+              <li><b>반영 지표</b> — 대학마다 표준점수/백분위/변환표준점수 중 선택.</li>
+              <li><b>영어·한국사</b> — 절대평가 등급별 가산·감산.</li>
+              <li><b>탐구 지정</b> — 자연계 일부 학과는 과탐 필수 또는 가산점.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h2>추천 결과 읽는 법</h2>
+            <ul class="plain">
+              <li><b class="t-safe">안정</b> 교과: 내 등급이 70%컷보다 0.3 이상 높음 / 정시: 백분위 +1.5 이상</li>
+              <li><b class="t-fit">적정</b> 교과: 0 ~ 0.3 높음 / 정시: 0 ~ +1.5</li>
+              <li><b class="t-reach">소신</b> 교과: 0.3 이내로 낮음 / 정시: −1.5 ~ 0</li>
+              <li><b class="t-up">상향</b> 교과: 0.3 ~ 0.7 낮음 / 정시: −3 ~ −1.5</li>
+            </ul>
+            <p class="note">입결은 매년 변동합니다. 모집인원 변화, 전형 변경, 수능최저 충족률을 함께 보세요.</p>
+          </article>
+          <article class="card">
+            <h2>공식 정보 바로가기</h2>
+            <ul class="link-list">
+              <li><a href="https://www.adiga.kr" target="_blank" rel="noopener">대학어디가 (대교협 대입정보포털)</a><span>대학별 공식 입결·모집요강</span></li>
+              <li><a href="https://www.suneung.re.kr" target="_blank" rel="noopener">한국교육과정평가원 수능</a><span>수능·모의평가 일정과 정답</span></li>
+              <li><a href="https://www.kcue.or.kr" target="_blank" rel="noopener">한국대학교육협의회</a><span>대입전형 기본사항·시행계획</span></li>
+              <li><a href="https://www.academyinfo.go.kr" target="_blank" rel="noopener">대학알리미</a><span>대학 공시 정보</span></li>
+            </ul>
+          </article>
+        </div>
+
+        <h2 class="sub-head">고3 연간 입시 흐름</h2>
+        <ol class="timeline">
+          <li><span>3월</span><div><b>3월 학력평가</b> 고3 첫 모의고사, 현재 위치 점검</div></li>
+          <li><span>4~5월</span><div><b>대학별 모집요강 발표</b> 희망 대학의 전형·수능최저 확인</div></li>
+          <li><span>6월</span><div><b>6월 모의평가</b> 평가원 주관, 재수생 포함 첫 시험</div></li>
+          <li><span>9월</span><div><b>9월 모의평가 · 수시 원서접수</b> 9월 모평 결과로 수시/정시 비중 결정</div></li>
+          <li><span>11월</span><div><b>대학수학능력시험</b> 시험 당일 가채점으로 수시 최저 충족·정시 지원선 판단</div></li>
+          <li><span>12월</span><div><b>수능 성적 발표 · 수시 합격자 발표</b></div></li>
+          <li><span>12~1월</span><div><b>정시 원서접수</b> 가·나·다군 지원</div></li>
+          <li><span>2월</span><div><b>정시 합격자 발표 · 추가합격</b></div></li>
+        </ol>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p><strong>입시나침반</strong> · 이 사이트의 추천 결과는 참고용이며 합격을 보장하지 않습니다. 입력한 성적은 이 브라우저에만 저장되고 서버로 전송되지 않습니다.</p>
+      <p class="muted">데이터 기준일 <span id="dataUpdated">-</span></p>
+    </div>
+  </footer>
+
+  <script src="data/admission-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
