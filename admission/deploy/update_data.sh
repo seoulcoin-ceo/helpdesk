@@ -8,6 +8,9 @@ APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 echo "== $(date '+%F %T') 데이터 갱신 시작"
 cd "${APP_DIR}/pipeline"
 python3 build_data.py --check-links
+python3 build_pages.py
 rsync -a --delete "${APP_DIR}/data/" "${WEBROOT}/data/"
-chown -R www-data:www-data "${WEBROOT}/data"
+rsync -a --delete "${APP_DIR}/u/" "${WEBROOT}/u/"
+cp "${APP_DIR}/sitemap.xml" "${APP_DIR}/robots.txt" "${WEBROOT}/"
+chown -R www-data:www-data "${WEBROOT}"
 echo "== $(date '+%F %T') 완료"

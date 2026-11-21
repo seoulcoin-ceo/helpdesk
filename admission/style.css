@@ -200,3 +200,10 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 1
   .timeline li { grid-template-columns: 1fr; gap: 2px; }
   .card { padding: 16px; }
 }
+
+/* 검색엔진용 정적 페이지(u/) 메뉴: 모바일에서도 가로 스크롤로 항상 표시 */
+@media (max-width: 760px) {
+  .site-nav.static-nav { display: flex; position: static; flex-direction: row; overflow-x: auto; padding: 0; border: 0; background: none; }
+  .static-nav a { white-space: nowrap; padding: 6px 8px; font-size: .85rem; }
+  .site-header:has(.static-nav) .nav-wrap { flex-direction: column; align-items: flex-start; padding: 8px 0; gap: 4px; }
+}
