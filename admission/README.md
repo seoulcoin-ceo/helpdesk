@@ -42,6 +42,17 @@ admission/
 `ping isjung.com` 결과가 서버 IP 로 나오면 다음 단계로 진행하세요. (반영까지 수 분~수 시간)
 
 ### 2. 서버에서 설치
+**방법 A — 압축 파일(isjung-site.zip)로 설치** (GitHub 연결 전)
+```bash
+# 내 PC에서 서버로 업로드
+scp isjung-site.zip 사용자@서버IP:/tmp/
+# 서버에서
+sudo apt-get install -y unzip
+sudo mkdir -p /opt/isjung && sudo unzip -o /tmp/isjung-site.zip -d /opt/isjung
+sudo EMAIL=본인이메일 bash /opt/isjung/admission/deploy/install.sh
+```
+
+**방법 B — GitHub에서 받아 설치**
 ```bash
 # 우분투 버전 확인 (Ubuntu 22.04 / 24.04 권장)
 cat /etc/os-release
