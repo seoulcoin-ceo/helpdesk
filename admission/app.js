@@ -62,7 +62,7 @@
       case "child": p = pageChild(parts[1]); break;
       case "terms": p = pageTerms(); break;
       case "privacy": p = pagePrivacy(); break;
-      case "guide": p = pageGuide(); break;
+      case "guide": p = pageGuide(q); break;
       case "data": p = pageData(); break;
       default: p = pageHome();
     }
@@ -980,43 +980,24 @@
   }
 
   /* ---------- 가이드 ---------- */
-  function pageGuide() {
+  function pageGuide(q) {
+    var G = window.GUIDE;
+    if (!G) { view.innerHTML = '<section class="section"><p>가이드를 불러오지 못했습니다.</p></section>'; return; }
+    var cur = (q && q.get("s")) || G.sections[0].id;
     view.innerHTML =
-      '<section class="section"><div class="section-head"><h1>입시 가이드</h1><p>제도 설명은 교육부·대교협 공식 발표를 기준으로 합니다. 세부 사항은 매년 바뀌므로 해당 학년도 모집요강을 반드시 확인하세요.</p></div>' +
-      '<div class="grid-2">' +
-      '<article class="card"><h2>수시와 정시</h2><ul class="plain">' +
-      "<li><b>수시</b>: 학생부교과·학생부종합·논술·실기 전형. 최대 6회 지원(산업대·전문대·KAIST 등 특수 대학 제외). 최초·충원 합격 시 정시 지원 불가.</li>" +
-      "<li><b>정시</b>: 수능 위주. 가·나·다군 군별 1회씩 최대 3회 지원.</li>" +
-      "<li><b>수능 최저학력기준</b>: 수시 합격을 위해 충족해야 하는 수능 등급 조건. 대학·전형마다 다름.</li></ul></article>" +
-      '<article class="card"><h2>공식 입시결과(입결) 읽는 법</h2><ul class="plain">' +
-      "<li><b>50%컷 / 70%컷</b>: 최종 등록자를 성적순으로 줄 세웠을 때 상위 50%·70% 지점의 성적. 70%컷이 ‘이 정도면 합격권 하단’에 가깝습니다.</li>" +
-      "<li><b>최초합 vs 최종등록</b>: 추가합격 후 실제 등록자 기준인지 확인하세요. 대부분 최종등록자 기준입니다.</li>" +
-      "<li><b>학생부종합 등급</b>: 정량 반영이 아니라 참고용 수치입니다(대학 각주 참고).</li>" +
-      "<li><b>정시 점수</b>: 대학별 환산점수·백분위 평균 등 기준이 제각각이므로 대학 간 숫자를 그대로 비교하면 안 됩니다.</li></ul></article>" +
-      '<article class="card"><h2>경쟁률·충원율 읽는 법</h2><ul class="plain">' +
-      "<li><b>경쟁률</b> = 정원내 지원자 ÷ 정원내 모집인원 (수시·정시 합산, 대학알리미 공시). 수시 6회 중복지원 때문에 실제 체감 경쟁보다 높게 나옵니다.</li>" +
-      "<li><b>신입생 충원율</b> = 정원내 입학자 ÷ 정원내 모집인원. 100% 미만이면 미충원이 발생했다는 뜻입니다.</li>" +
-      "<li><b>10년 추이</b>: 학과 신설·통폐합·명칭 변경 시 이전 연도 기록이 끊길 수 있습니다.</li></ul></article>" +
-      '<article class="card"><h2>전문대학</h2><ul class="plain">' +
-      "<li>전문대학은 수시 6회 제한이 없어 횟수 제한 없이 지원할 수 있습니다(정시도 횟수 제한 없음).</li>" +
-      "<li>일반전형 외에 일반고·특성화고 졸업자 특별전형, 고른기회, 대학자체기준 등 전형이 다양합니다.</li>" +
-      "<li>수시 합격자(등록 여부 무관)의 정시 지원 제한은 4년제와 전문대학 사이에도 적용됩니다. 해당 학년도 ‘대입전형 기본사항’을 꼭 확인하세요.</li></ul></article>" +
-      "</div>" +
-      '<h2 class="sub-head">고3 연간 흐름</h2><ol class="timeline">' +
-      "<li><span>3월</span><div><b>3월 학력평가</b> · 대학별 전형시행계획(전년도 4월 발표) 확인</div></li>" +
-      "<li><span>4~5월</span><div><b>대학별 수시 모집요강 발표</b> · 지난해 공식 입결 원문 비교</div></li>" +
-      "<li><span>6월</span><div><b>6월 모의평가</b>(평가원)</div></li>" +
-      "<li><span>9월</span><div><b>9월 모의평가 · 수시 원서접수</b></div></li>" +
-      "<li><span>11월</span><div><b>대학수학능력시험</b> · 가채점으로 수시 최저·정시 지원선 판단</div></li>" +
-      "<li><span>12월</span><div><b>수능 성적 통지 · 수시 합격자 발표 · 정시 원서접수(12월 말~1월 초)</b></div></li>" +
-      "<li><span>1~2월</span><div><b>정시 합격자 발표 · 추가합격</b></div></li></ol>" +
-      '<h2 class="sub-head">공식 정보 바로가기</h2><ul class="link-list">' +
-      link("https://www.adiga.kr", "대학어디가 (한국대학교육협의회)", "대학별 입결·모집요강·성적분석 공식 포털") +
-      link("https://www.academyinfo.go.kr", "대학알리미 (교육부)", "대학 정보공시 원자료") +
-      link("https://www.procollege.kr", "전문대학포털 (한국전문대학교육협의회)", "전문대학 입시정보") +
+      '<section class="section"><div class="section-head"><h1>입시 가이드</h1><p>교육부·대교협 공식 발표를 기준으로 정리했습니다(' + esc(G.updated) + ' 기준). 세부 사항은 대학·학년도마다 다르니 지원 전 반드시 모집요강을 확인하세요.</p></div>' +
+      '<div class="guide-layout"><nav class="guide-nav" aria-label="가이드 목차">' +
+      G.sections.map(function (x) { return '<a href="#/guide?s=' + x.id + '"' + (x.id === cur ? ' class="is-active"' : "") + ">" + esc(x.title) + "</a>"; }).join("") + "</nav>" +
+      '<div class="guide-body">' + G.sections.filter(function (x) { return x.id === cur; }).map(function (x) {
+        return "<h2>" + esc(x.title) + '</h2><p class="lead-sm">' + esc(x.lead) + "</p>" + x.html;
+      }).join("") +
+      '<h3 class="sub-head">공식 정보 바로가기</h3><ul class="link-list">' +
+      link("https://www.adiga.kr", "대학어디가 (한국대학교육협의회)", "대학별 입결·모집요강·추가모집 공식 포털") +
+      link("https://www.academyinfo.go.kr", "대학알리미 (교육부)", "대학 재정·취업률·충원율 공시 원자료") +
+      link("https://www.procollege.kr", "전문대학포털", "전문대학 입시정보") +
       link("https://www.suneung.re.kr", "한국교육과정평가원 수능", "수능·모의평가 일정과 정답") +
-      link("https://jinhak.gne.go.kr", "경남대입정보센터 (경상남도교육청)", "대학별 입시결과·모집요강 원문 모음") +
-      "</ul></section>";
+      link("https://www.kcue.or.kr", "한국대학교육협의회", "대입전형 기본사항·시행계획") +
+      "</ul></div></div></section>";
   }
   function link(href, t, d) { return '<li><a href="' + href + '" target="_blank" rel="noopener">' + t + "</a><span>" + d + "</span></li>"; }
 
