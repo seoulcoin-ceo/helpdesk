@@ -42,7 +42,7 @@ if [ "${FRESH_NGINX}" = "1" ]; then
   rm -f /etc/nginx/sites-enabled/default   # 새로 깐 nginx 의 기본 80 포트 사이트만 끔 (기존 설정은 건드리지 않음)
 fi
 [ -x /opt/ipsi-venv/bin/python ] || python3 -m venv /opt/ipsi-venv
-/opt/ipsi-venv/bin/pip install -q --upgrade pdfplumber   # 입결 PDF 표 추출용
+/opt/ipsi-venv/bin/pip install -q --upgrade pdfplumber numpy   # 입결 PDF 표 추출, 미달 예측
 
 echo "[1b/5] 회원 API (127.0.0.1:${API_PORT})"
 /opt/ipsi-venv/bin/pip install -q -r "${APP_DIR}/api/requirements.txt"

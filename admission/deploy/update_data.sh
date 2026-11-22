@@ -10,9 +10,14 @@ cd "${APP_DIR}/pipeline"
 python3 build_data.py --check-links
 # 대학 발표 입시결과 PDF → 표 추출 (최근 2개 학년도, 원문 대조 통과 표만)
 /opt/ipsi-venv/bin/python extract_results.py --jobs 4 || echo "!! 입결 추출 실패 - 기존 입결 데이터 유지"
+# 파생 자료: 학과 정보, 미달 예측, 교과 합격선(이용권 기능, 웹 비공개)
+python3 build_majors.py || echo "!! 학과 정보 갱신 실패"
+/opt/ipsi-venv/bin/python undersub.py || echo "!! 미달 예측 갱신 실패"
+python3 build_cuts.py || echo "!! 합격선 갱신 실패"
 SITE_URL="https://${DOMAIN}" python3 build_pages.py
 rsync -a --delete "${APP_DIR}/data/" "${WEBROOT}/data/"
 rsync -a --delete "${APP_DIR}/u/" "${WEBROOT}/u/"
+systemctl restart ipsi-api 2>/dev/null || true
 cp "${APP_DIR}/sitemap.xml" "${APP_DIR}/robots.txt" "${WEBROOT}/"
 chown -R www-data:www-data "${WEBROOT}"
 echo "== $(date '+%F %T') 완료"
