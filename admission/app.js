@@ -55,6 +55,7 @@
       case "calc": p = pageCalc(); break;
       case "chance": p = pageChance(q); break;
       case "major": p = pageMajor(parts[1]); break;
+      case "admin": p = parts[1] === "gichul" ? pageGichul() : pageHome(); break;
       case "login": p = pageLogin(q); break;
       case "signup": p = pageSignup(); break;
       case "account": p = pageAccount(); break;
@@ -571,6 +572,7 @@
         "<li>학과별 최근 신입생 충원율·경쟁률·3년간 미달 횟수, 대학 전체 충원율, 모집 규모로 미달 확률을 계산합니다(로지스틱 회귀).</li>" +
         "<li><b>정확도(과거 검증)</b>: " + R.backtest.years[0] + "~" + R.backtest.years[1] + "학년도를 각각 그 전 자료만으로 예측해 본 결과, " +
         (hiP != null ? "‘가능성 높음’으로 고른 학과의 <b>" + hiP + "%</b>가 실제로 미달" : "") + (midP != null ? ", ‘가능성 있음’까지 넓히면 " + midP + "%가 실제로 미달" : "") + "이었습니다. 판별력(AUC) " + R.backtest.auc + ".</li>" +
+        "<li><b>검정고시 출신도 지원할 수 있습니다.</b> 정시는 수능 점수로, 수시는 대학이 정한 방식(비교내신 등)으로 지원합니다. 미달이 잦은 대학은 검정고시 출신 지원을 폭넓게 받는 경우가 많으니 모집요강의 ‘지원자격’을 확인하세요.</li>" +
         "<li>합격선(성적 컷)을 보여 주는 화면이 아닙니다. 실제 전형·지원 자격은 대학 모집요강을 확인하세요.</li></ul></div>" +
         '<div class="card"><h2>알고 선택하세요</h2><p class="small">이 목록은 대학을 걸러 내지 않습니다. 불이익이 있더라도 4년제 학위가 더 중요한 학생도 있으니, 아래를 미리 알고 선택하면 됩니다.</p><ul class="plain small">' +
         "<li><b>학자금 지원 제한 여부</b>: 교육부가 매년 8~9월 발표하는 ‘학자금 지원 제한 대학’이면 그 해 국가장학금·학자금 대출이 막힐 수 있습니다. 제한은 해마다 다시 평가되며, 대학이 자체 장학금으로 보전해 주는 경우도 있으니 입학처에 확인하세요.</li>" +
@@ -951,6 +953,7 @@
         "<li><b>수시 교과·종합</b>: 학생부가 없으므로 대학이 정한 방식으로 검정고시 점수를 내신 등급으로 바꿉니다(‘비교내신’). 검정고시 점수 구간별 환산표를 쓰는 대학, 수능 성적과 연계하는 대학, 서류·면접으로만 보는 대학 등 방식이 모두 다릅니다. <b>같은 평균 점수라도 대학마다 환산 등급이 다르므로</b> 이 사이트는 등급을 임의로 환산하지 않습니다.</li>" +
         "<li><b>지원 제한</b>: 학교장추천이 필요한 전형은 대부분 지원할 수 없고, 일부 대학은 검정고시 출신자의 수시 지원 자체를 제한합니다.</li>" +
         "<li><b>확인할 곳</b>: 지원하려는 대학 모집요강의 ‘지원자격’, ‘검정고시 출신자 성적 산출(비교내신)’ 항목. 대학 상세 페이지 하단의 모집요강 원문 링크를 이용하세요.</li>" +
+        '<li><b>합격 가능성이 높은 4년제</b>: <a href="#/chance">4년제 기회 찾기</a>에서 최근 미달이 이어진 대학·학과를 볼 수 있습니다. 검정고시 출신도 지원할 수 있는 곳이 많습니다.</li>' +
         "</ul></div>";
       $("#gedRows").addEventListener("input", function (e) {
         var tr = e.target.closest("tr"); if (!tr) return;
@@ -1154,6 +1157,11 @@
     if (!a) return;
     a.textContent = ME ? (ME.name || "내 계정") : "로그인";
     a.setAttribute("href", ME ? "#/account" : "#/login");
+    var g = $("#navGichul");
+    if (ME && ME.isAdmin && !g) {
+      g = document.createElement("a"); g.id = "navGichul"; g.href = "#/admin/gichul"; g.setAttribute("data-nav", "admin"); g.textContent = "기출 정리함";
+      a.parentNode.insertBefore(g, a);
+    } else if (g && !(ME && ME.isAdmin)) g.remove();
   }
   function needLogin(next) {
     view.innerHTML = '<section class="section"><div class="card narrow"><h1>로그인이 필요합니다</h1><p class="muted">이 기능은 회원만 쓸 수 있습니다.</p>' +
@@ -1433,6 +1441,174 @@
       "<h2>6. 안전성 확보 조치</h2><p>비밀번호는 복원할 수 없는 방식(scrypt)으로 암호화하고, 모든 통신은 HTTPS로 암호화합니다.</p>" +
       "<h2>7. 개인정보 보호책임자</h2><p>" + OFFICER + "</p>" +
       '<p class="muted small">이 방침은 초안입니다. 운영 전에 운영자·책임자 정보와 내용을 검토해 확정하세요.</p></div></section>';
+  }
+
+  /* ---------- 관리자: 기출 정리함 (운영자 개인 참고용) ---------- */
+  var G_SUBJ = ["언어와 매체", "화법과 작문", "문학", "독서", "국어", "확률과 통계", "미적분", "기하", "수학Ⅱ", "수학Ⅰ", "수학2", "수학1", "수학",
+    "영어Ⅱ", "영어Ⅰ", "영어2", "영어1", "영어독해와 작문", "영어", "한국사", "통합사회", "통합과학", "물리학Ⅱ", "물리학Ⅰ", "물리", "화학Ⅱ", "화학Ⅰ", "화학",
+    "생명과학Ⅱ", "생명과학Ⅰ", "생명과학", "지구과학Ⅱ", "지구과학Ⅰ", "지구과학", "한국지리", "세계지리", "생활과 윤리", "윤리와 사상", "사회·문화", "사회문화",
+    "정치와 법", "경제", "동아시아사", "세계사", "정보", "일본어", "중국어", "한문", "과학탐구실험"];
+  function gParse(name) {
+    var n = name.replace(/[_\-.()\[\]]/g, " "), sq = n.replace(/\s+/g, "");
+    var y = (n.match(/20(1\d|2\d|3\d)/) || [""])[0];
+    var g = (sq.match(/([123])학년/) || sq.match(/고([123])/) || [null, ""])[1];
+    var sem = (sq.match(/([12])학기/) || [null, ""])[1];
+    var exam = /중간/.test(sq) ? "중간" : /기말/.test(sq) ? "기말" : /1차/.test(sq) ? "1차 지필" : /2차/.test(sq) ? "2차 지필" : "";
+    var subj = "";
+    for (var i = 0; i < G_SUBJ.length; i++) if (sq.indexOf(G_SUBJ[i].replace(/\s/g, "")) >= 0) { subj = G_SUBJ[i]; break; }
+    return { year: y, grade: g ? g + "학년" : "", sem: sem ? sem + "학기" : "", exam: exam, subject: subj };
+  }
+  function pageGichul() {
+    return refreshMe().then(function () {
+      if (!ME) return needLogin("admin/gichul");
+      if (!ME.isAdmin) { view.innerHTML = '<section class="section"><h1>페이지를 찾을 수 없습니다</h1></section>'; return; }
+      return Promise.all([api("GET", "/admin/gichul/schools"), api("GET", "/admin/gichul/files")]).then(function (r) {
+        var schools = r[0], files = r[1];
+        var st = { q: "", gu: "", status: "", type: "", open: null, tab: "schools" };
+        var gus = uniq(schools.map(function (s) { return s.gu; })).sort();
+        var types = uniq(schools.map(function (s) { return s.type; })).sort();
+        view.innerHTML = '<section class="section"><div class="section-head"><h1>기출 정리함 <span class="tag tag-w">관리자 전용</span></h1>' +
+          "<p>서울 고등학교가 홈페이지에 공개한 평가 문항을 직접 내려받아 모아 두는 곳입니다. 파일은 웹에 공개되지 않는 서버 폴더에만 저장되며 운영자 개인 참고용입니다(사이트 게시·배포 금지).</p></div>" +
+          '<div class="kpis" id="gSum"></div>' +
+          '<div class="tabs" style="margin:14px 0"><button type="button" data-t="schools">학교 체크리스트</button><button type="button" data-t="files">모은 파일</button></div>' +
+          '<div id="gBody"></div></section>';
+        function summary() {
+          var c = function (v) { return schools.filter(function (s) { return s.status === v; }).length; };
+          $("#gSum").innerHTML = kpi("전체 학교", schools.length + "곳") + kpi("받음", c("받음") + "곳") + kpi("확인 중", c("확인 중") + "곳") +
+            kpi("자료 없음", c("자료 없음") + "곳") + kpi("남은 학교", c("") + "곳") + kpi("모은 파일", files.length + "개");
+        }
+        function tabs() {
+          $all(".tabs button[data-t]").forEach(function (b) { b.classList.toggle("is-active", b.getAttribute("data-t") === st.tab); });
+          if (st.tab === "files") renderFiles(); else renderSchools();
+        }
+        $all(".tabs button[data-t]").forEach(function (b) { b.addEventListener("click", function () { st.tab = b.getAttribute("data-t"); tabs(); }); });
+
+        function renderSchools() {
+          $("#gBody").innerHTML = '<div class="card"><div class="toolbar">' +
+            '<label>학교 검색<input type="search" id="gQ" value="' + esc(st.q) + '" /></label>' +
+            '<label>구<select id="gGu"><option value="">전체</option>' + gus.map(function (g) { return "<option" + (g === st.gu ? " selected" : "") + ">" + esc(g) + "</option>"; }).join("") + "</select></label>" +
+            '<label>학교 유형<select id="gType"><option value="">전체</option>' + types.map(function (g) { return "<option" + (g === st.type ? " selected" : "") + ">" + esc(g) + "</option>"; }).join("") + "</select></label>" +
+            '<label>진행 상황<select id="gSt"><option value="">전체</option><option value="-">아직 안 봄</option><option>확인 중</option><option>받음</option><option>자료 없음</option><option>제외</option></select></label></div>' +
+            '<p class="muted small">① 학교 이름 옆 ‘홈페이지’를 눌러 학교 홈페이지의 ‘평가 공개’(학사·평가 메뉴)에서 문항 파일을 내려받고 → ② ‘파일 올리기’에 끌어다 놓으세요. 파일 이름에서 학년도·학년·학기·시험·과목을 자동으로 채웁니다.</p>' +
+            '<div class="table-wrap"><table class="data-table"><thead><tr><th>학교</th><th>구</th><th>유형</th><th>홈페이지</th><th>진행 상황</th><th class="num">파일</th><th></th></tr></thead><tbody id="gRows"></tbody></table></div></div>';
+          $("#gSt").value = st.status;
+          var rows = function () {
+            var list = schools.filter(function (s) {
+              return (!st.q || s.name.indexOf(st.q) >= 0) && (!st.gu || s.gu === st.gu) && (!st.type || s.type === st.type) &&
+                (!st.status || (st.status === "-" ? s.status === "" : s.status === st.status));
+            });
+            $("#gRows").innerHTML = list.map(function (s) {
+              var html = '<tr data-code="' + esc(s.code) + '"><td><b>' + esc(s.name) + "</b></td><td>" + esc(s.gu) + "</td><td>" + esc(s.type) + "</td>" +
+                '<td><a href="' + esc(s.home) + '" target="_blank" rel="noopener">홈페이지 ↗</a></td>' +
+                '<td><select data-status>' + ["", "확인 중", "받음", "자료 없음", "제외"].map(function (v) { return '<option value="' + v + '"' + (v === s.status ? " selected" : "") + ">" + (v || "아직 안 봄") + "</option>"; }).join("") + "</select></td>" +
+                '<td class="num">' + (s.files ? '<a href="#" data-showfiles>' + s.files + "</a>" : "0") + '</td><td><button class="btn btn-ghost" type="button" data-up>파일 올리기</button></td></tr>';
+              if (st.open === s.code) html += '<tr class="exp-detail"><td colspan="7">' + uploader(s) + "</td></tr>";
+              return html;
+            }).join("") || '<tr><td colspan="7" class="empty">조건에 맞는 학교가 없습니다.</td></tr>';
+            if (st.open) bindUploader(schools.filter(function (s) { return s.code === st.open; })[0], rows);
+          };
+          $("#gRows").addEventListener("change", function (e) {
+            if (!e.target.hasAttribute("data-status")) return;
+            var code = e.target.closest("tr").getAttribute("data-code"), s = schools.filter(function (x) { return x.code === code; })[0];
+            api("PUT", "/admin/gichul/schools/" + encodeURIComponent(code), { status: e.target.value, note: s.note }).then(function () { s.status = e.target.value; summary(); });
+          });
+          $("#gRows").addEventListener("click", function (e) {
+            var tr = e.target.closest("tr[data-code]"); if (!tr) return;
+            var code = tr.getAttribute("data-code");
+            if (e.target.hasAttribute("data-up")) { st.open = st.open === code ? null : code; rows(); }
+            if (e.target.hasAttribute("data-showfiles")) { e.preventDefault(); st.tab = "files"; st.fileSchool = code; tabs(); }
+          });
+          var t;
+          $("#gQ").addEventListener("input", function () { var v = this.value.trim(); clearTimeout(t); t = setTimeout(function () { st.q = v; rows(); }, 150); });
+          $("#gGu").addEventListener("change", function () { st.gu = this.value; rows(); });
+          $("#gType").addEventListener("change", function () { st.type = this.value; rows(); });
+          $("#gSt").addEventListener("change", function () { st.status = this.value; rows(); });
+          rows();
+        }
+        function uploader(s) {
+          return '<div class="drop" id="gDrop"><b>' + esc(s.name) + '</b> — 파일을 여기에 끌어다 놓거나 <label class="linklike">선택<input type="file" id="gPick" multiple hidden /></label> (hwp·hwpx·pdf·zip 등, 60MB 이하)' +
+            '<label style="display:block;margin-top:8px">원본 게시글 주소(선택)<input id="gSrc" placeholder="학교 홈페이지 게시글 주소를 붙여 두면 나중에 다시 찾기 쉽습니다" /></label></div>' +
+            '<div id="gQueue"></div>';
+        }
+        function bindUploader(s, rerender) {
+          var queue = [];
+          var drop = $("#gDrop");
+          function add(fl) {
+            Array.prototype.forEach.call(fl, function (f) { var p = gParse(f.name); queue.push({ f: f, m: p, state: "" }); });
+            paint();
+          }
+          function paint() {
+            $("#gQueue").innerHTML = queue.length ? '<div class="table-wrap"><table class="data-table compact"><thead><tr><th>파일</th><th>학년도</th><th>학년</th><th>학기</th><th>시험</th><th>과목</th><th></th></tr></thead><tbody>' +
+              queue.map(function (q, i) {
+                var inp = function (k, w) { return '<input data-i="' + i + '" data-k="' + k + '" value="' + esc(q.m[k]) + '" style="width:' + w + 'px" />'; };
+                return "<tr><td>" + esc(q.f.name) + ' <small class="muted">' + Math.round(q.f.size / 1024) + "KB</small></td><td>" + inp("year", 70) + "</td><td>" + inp("grade", 60) +
+                  "</td><td>" + inp("sem", 60) + "</td><td>" + inp("exam", 70) + "</td><td>" + inp("subject", 110) + "</td><td>" + (q.state ? esc(q.state) : '<button class="icon-btn" data-rm="' + i + '">×</button>') + "</td></tr>";
+              }).join("") + '</tbody></table></div><button class="btn btn-primary" type="button" id="gSend">' + queue.filter(function (q) { return !q.state; }).length + "개 올리기</button>" : "";
+            $all("#gQueue input").forEach(function (el) { el.addEventListener("input", function () { queue[+el.getAttribute("data-i")].m[el.getAttribute("data-k")] = el.value; }); });
+            $all("#gQueue [data-rm]").forEach(function (b) { b.addEventListener("click", function () { queue.splice(+b.getAttribute("data-rm"), 1); paint(); }); });
+            if ($("#gSend")) $("#gSend").addEventListener("click", send);
+          }
+          function send() {
+            var src = $("#gSrc").value.trim();
+            var todo = queue.filter(function (q) { return !q.state; });
+            var next = function () {
+              var q = todo.shift();
+              if (!q) {
+                return api("GET", "/admin/gichul/files").then(function (f) {
+                  files = f; s.files = files.filter(function (x) { return x.school_code === s.code; }).length;
+                  if (!s.status) s.status = "받음";
+                  summary(); paint();
+                });
+              }
+              q.state = "올리는 중…"; paint();
+              var qs = new URLSearchParams({ school: s.code, name: q.f.name, year: /^\d{4}$/.test(q.m.year) ? q.m.year : "0", grade: q.m.grade, sem: q.m.sem, exam: q.m.exam, subject: q.m.subject, src: src });
+              return fetch("/api/admin/gichul/upload?" + qs, { method: "PUT", credentials: "same-origin", headers: { "x-ipsi": "1" }, body: q.f })
+                .then(function (r) { return r.json().then(function (j) { q.state = r.ok ? "완료" : (j.error || "실패"); }); })
+                .catch(function () { q.state = "실패(연결)"; }).then(next);
+            };
+            next();
+          }
+          drop.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("over"); });
+          drop.addEventListener("dragleave", function () { drop.classList.remove("over"); });
+          drop.addEventListener("drop", function (e) { e.preventDefault(); drop.classList.remove("over"); add(e.dataTransfer.files); });
+          $("#gPick").addEventListener("change", function () { add(this.files); this.value = ""; });
+        }
+
+        function renderFiles() {
+          var sub = uniq(files.map(function (f) { return f.subject; })).sort();
+          var yrs = uniq(files.map(function (f) { return String(f.year || ""); })).sort().reverse();
+          var fs = { school: st.fileSchool || "", subject: "", year: "" };
+          $("#gBody").innerHTML = '<div class="card"><div class="toolbar">' +
+            '<label>학교<select id="fSch"><option value="">전체</option>' + uniq(files.map(function (f) { return f.school_code + "|" + f.school_name; })).sort(function (a, b) { return a.split("|")[1].localeCompare(b.split("|")[1], "ko"); })
+              .map(function (v) { var p = v.split("|"); return '<option value="' + esc(p[0]) + '"' + (p[0] === fs.school ? " selected" : "") + ">" + esc(p[1]) + "</option>"; }).join("") + "</select></label>" +
+            '<label>학년도<select id="fYr"><option value="">전체</option>' + yrs.map(function (y) { return "<option>" + esc(y) + "</option>"; }).join("") + "</select></label>" +
+            '<label>과목<select id="fSub"><option value="">전체</option>' + sub.map(function (y) { return "<option>" + esc(y) + "</option>"; }).join("") + "</select></label></div>" +
+            '<div class="table-wrap"><table class="data-table"><thead><tr><th>학교</th><th>학년도</th><th>학년</th><th>학기</th><th>시험</th><th>과목</th><th>파일</th><th></th></tr></thead><tbody id="fRows"></tbody></table></div></div>';
+          function rows() {
+            var list = files.filter(function (f) { return (!fs.school || f.school_code === fs.school) && (!fs.year || String(f.year || "") === fs.year) && (!fs.subject || f.subject === fs.subject); });
+            $("#fRows").innerHTML = list.map(function (f) {
+              return "<tr><td>" + esc(f.school_name) + "</td><td>" + (f.year || "") + "</td><td>" + esc(f.grade) + "</td><td>" + esc(f.sem) + "</td><td>" + esc(f.exam) + "</td><td>" + esc(f.subject) +
+                '</td><td><a href="/api/admin/gichul/files/' + f.id + '/download">' + esc(f.filename) + "</a>" + (f.src_url ? ' <a href="' + esc(f.src_url) + '" target="_blank" rel="noopener" class="small">원문↗</a>' : "") +
+                '</td><td><button class="icon-btn" data-fdel="' + f.id + '" aria-label="삭제">×</button></td></tr>';
+            }).join("") || '<tr><td colspan="8" class="empty">모은 파일이 없습니다.</td></tr>';
+          }
+          $("#fRows").addEventListener("click", function (e) {
+            var id = e.target.getAttribute("data-fdel"); if (!id) return;
+            if (!confirm("이 파일을 서버에서 지울까요?")) return;
+            api("DELETE", "/admin/gichul/files/" + id).then(function () {
+              files = files.filter(function (f) { return String(f.id) !== id; });
+              schools.forEach(function (s) { s.files = files.filter(function (f) { return f.school_code === s.code; }).length; });
+              summary(); rows();
+            });
+          });
+          $("#fSch").addEventListener("change", function () { fs.school = this.value; st.fileSchool = this.value; rows(); });
+          $("#fYr").addEventListener("change", function () { fs.year = this.value; rows(); });
+          $("#fSub").addEventListener("change", function () { fs.subject = this.value; rows(); });
+          rows();
+        }
+        summary(); tabs();
+      });
+    });
   }
 
   /* ---------- 시작 ---------- */

@@ -63,6 +63,10 @@ NAVER_CLIENT_SECRET=
 ENV
   chmod 640 /etc/ipsi/api.env; chown root:www-data /etc/ipsi/api.env
 fi
+grep -q '^ADMIN_EMAILS=' /etc/ipsi/api.env || printf '\n# 관리자(기출 정리함) 이메일, 쉼표로 여러 개\nADMIN_EMAILS=\nGICHUL_DIR=/mnt/backup/ipsi-gichul\n' >> /etc/ipsi/api.env
+if [ -d /mnt/backup ]; then
+  mkdir -p /mnt/backup/ipsi-gichul && chown -R www-data:www-data /mnt/backup/ipsi-gichul && chmod 750 /mnt/backup/ipsi-gichul
+fi
 sed -e "s#/opt/ipsi/admission#${APP_DIR}#" -e "s/8501/${API_PORT}/" "${APP_DIR}/deploy/ipsi-api.service" > /etc/systemd/system/ipsi-api.service
 systemctl daemon-reload
 systemctl enable ipsi-api >/dev/null 2>&1

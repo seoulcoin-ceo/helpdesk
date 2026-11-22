@@ -12,7 +12,7 @@ ExecStart=/opt/ipsi-venv/bin/uvicorn app:app --host 127.0.0.1 --port 8501 --work
 Restart=on-failure
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/var/lib/ipsi
+ReadWritePaths=/var/lib/ipsi -/mnt/backup/ipsi-gichul
 PrivateTmp=true
 
 [Install]

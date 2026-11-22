@@ -263,3 +263,7 @@ tr.is-cur td { background: var(--primary-soft); }
 .chip small { color: var(--muted); font-weight: 500; }
 .major-info h3 { font-size: .95rem; margin: 14px 0 4px; color: var(--primary); }
 .major-info p { margin: 0; }
+/* 기출 정리함 */
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 16px; background: var(--surface-2); }
+.drop.over { border-color: var(--primary); background: var(--primary-soft); }
+.linklike { color: var(--primary); text-decoration: underline; cursor: pointer; font-weight: 700; }

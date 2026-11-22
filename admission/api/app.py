@@ -13,7 +13,7 @@ import hashlib, hmac, json, os, re, secrets, sqlite3, threading, time, urllib.pa
 from contextlib import contextmanager
 
 from fastapi import Body, FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 DB = os.environ.get("IPSI_DB", "/var/lib/ipsi/ipsi.db")
 SITE = os.environ.get("SITE_URL", "https://ipsi.isjung.com").rstrip("/")
@@ -55,6 +55,10 @@ CREATE TABLE IF NOT EXISTS links(id INTEGER PRIMARY KEY, student_id INTEGER NOT 
 CREATE TABLE IF NOT EXISTS link_codes(code TEXT PRIMARY KEY, student_id INTEGER NOT NULL, expires INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS oauth_states(state TEXT PRIMARY KEY, provider TEXT NOT NULL, expires INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS login_fail(key TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS gichul_school(code TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', updated INTEGER);
+CREATE TABLE IF NOT EXISTS gichul_files(id INTEGER PRIMARY KEY, school_code TEXT NOT NULL, school_name TEXT NOT NULL,
+  year INTEGER, grade TEXT, sem TEXT, exam TEXT, subject TEXT, filename TEXT NOT NULL, path TEXT NOT NULL,
+  size INTEGER NOT NULL, sha256 TEXT NOT NULL, src_url TEXT, created INTEGER NOT NULL);
 """
 
 
@@ -141,11 +145,18 @@ def user_of(request, need_consent=True):
     return u
 
 
+ADMINS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
+
+
+def is_admin(u):
+    return bool(u["email"]) and u["email"].lower() in ADMINS and bool(u["consent_at"])
+
+
 def public(u):
     with db() as c:
         prov = [r["provider"] for r in c.execute("SELECT provider FROM identities WHERE user_id=?", (u["id"],))]
     return {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"], "providers": prov,
-            "needConsent": not u["consent_at"], "reportConsent": bool(u["report_consent"])}
+            "needConsent": not u["consent_at"], "reportConsent": bool(u["report_consent"]), "isAdmin": is_admin(u)}
 
 
 def consent_ok(b):
@@ -471,6 +482,148 @@ def child_view(sid: int, request: Request):
     return {"name": s["name"], "email": s["email"], "data": json.loads(d["json"]) if d else None,
             "updated": d["updated"] if d else None, "reports": [dict(r) for r in reps]}
 
+
+
+# ---------- 관리자: 기출 정리함 (운영자 개인 참고용, 웹에 공개하지 않는 폴더에 저장) ----------
+GICHUL = os.environ.get("GICHUL_DIR", "/mnt/backup/ipsi-gichul")
+GICHUL_MAX = 60 * 1024 * 1024
+GICHUL_STATUS = ("", "확인 중", "받음", "자료 없음", "제외")
+GICHUL_EXT = (".hwp", ".hwpx", ".pdf", ".zip", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".xlsx", ".pptx")
+
+
+def admin_of(request):
+    u = user_of(request)
+    if not is_admin(u):
+        err(404, "없는 주소입니다.")
+    return u
+
+
+def gichul_schools():
+    fn = os.path.join(GICHUL, "schools.csv")
+    if not os.path.exists(fn):
+        return []
+    import csv
+    with open(fn, encoding="utf-8-sig") as f:
+        return list(csv.DictReader(f))
+
+
+def safe_name(n):
+    n = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", n).strip(" ._")
+    return n[:150] or "file"
+
+
+@app.get("/api/admin/gichul/schools")
+def g_schools(request: Request):
+    admin_of(request)
+    with db() as c:
+        st = {r["code"]: dict(r) for r in c.execute("SELECT * FROM gichul_school")}
+        cnt = {r["school_code"]: r["n"] for r in c.execute("SELECT school_code, COUNT(*) n FROM gichul_files GROUP BY school_code")}
+    out = []
+    for r in gichul_schools():
+        code = r["학교코드"]
+        gu = (re.search(r"(\S+구)\s", r.get("주소", "") + " ") or [None, ""])[1]
+        out.append({"code": code, "name": r["학교명"], "gu": gu, "type": r.get("구분", ""), "found": r.get("설립", ""),
+                    "home": r.get("홈페이지", ""), "status": (st.get(code) or {}).get("status", ""),
+                    "note": (st.get(code) or {}).get("note", ""), "files": cnt.get(code, 0)})
+    return out
+
+
+@app.put("/api/admin/gichul/schools/{code}")
+def g_school_set(code: str, request: Request, b: dict = Body(...)):
+    admin_of(request)
+    status = b.get("status", "")
+    if status not in GICHUL_STATUS:
+        err(400, "상태 값이 잘못되었습니다.")
+    with db() as c:
+        c.execute("INSERT OR REPLACE INTO gichul_school VALUES(?,?,?,?)", (code[:20], status, str(b.get("note", ""))[:300], now()))
+    return {"ok": True}
+
+
+@app.put("/api/admin/gichul/upload")
+async def g_upload(request: Request, school: str, name: str, year: int = 0, grade: str = "", sem: str = "", exam: str = "",
+                   subject: str = "", src: str = ""):
+    """파일 본문을 그대로 보낸다 (쿼리: 학교코드·원래 파일명·분류)"""
+    admin_of(request)
+    sch = next((r for r in gichul_schools() if r["학교코드"] == school), None)
+    if not sch:
+        err(400, "학교를 찾을 수 없습니다.")
+    fname = safe_name(name)
+    if not fname.lower().endswith(GICHUL_EXT):
+        err(400, "올릴 수 있는 파일 형식: " + ", ".join(GICHUL_EXT))
+    data = await request.body()
+    if not data:
+        err(400, "빈 파일입니다.")
+    if len(data) > GICHUL_MAX:
+        err(413, "60MB 이하만 올릴 수 있습니다.")
+    sha = hashlib.sha256(data).hexdigest()
+    with db() as c:
+        dup = c.execute("SELECT school_name, filename FROM gichul_files WHERE sha256=?", (sha,)).fetchone()
+    if dup:
+        err(409, f"같은 파일이 이미 있습니다: {dup['school_name']} / {dup['filename']}")
+    d = os.path.join(GICHUL, "files", safe_name(sch["학교명"]))
+    os.makedirs(d, exist_ok=True)
+    tag = "_".join(x for x in (str(year) if year else "", grade, sem, exam, subject) if x)
+    path = os.path.join(d, safe_name((tag + "__" if tag else "") + fname))
+    if os.path.exists(path):
+        path = os.path.join(d, sha[:6] + "_" + os.path.basename(path))
+    with open(path, "wb") as f:
+        f.write(data)
+    with db() as c:
+        fid = c.execute("INSERT INTO gichul_files(school_code,school_name,year,grade,sem,exam,subject,filename,path,size,sha256,src_url,created) "
+                        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (school, sch["학교명"], year or None, grade[:10], sem[:10], exam[:20], subject[:40], fname,
+                         os.path.relpath(path, GICHUL), len(data), sha, src[:500], now())).lastrowid
+        if not c.execute("SELECT status FROM gichul_school WHERE code=? AND status<>''", (school,)).fetchone():
+            c.execute("INSERT OR REPLACE INTO gichul_school VALUES(?,?,?,?)", (school, "받음", "", now()))
+    return {"id": fid}
+
+
+@app.get("/api/admin/gichul/files")
+def g_files(request: Request, school: str = ""):
+    admin_of(request)
+    with db() as c:
+        q = "SELECT id,school_code,school_name,year,grade,sem,exam,subject,filename,size,src_url,created FROM gichul_files"
+        rows = c.execute(q + (" WHERE school_code=?" if school else "") + " ORDER BY school_name, year DESC, sem, exam, subject",
+                         (school,) if school else ()).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.put("/api/admin/gichul/files/{fid}")
+def g_file_edit(fid: int, request: Request, b: dict = Body(...)):
+    admin_of(request)
+    y = b.get("year")
+    with db() as c:
+        c.execute("UPDATE gichul_files SET year=?, grade=?, sem=?, exam=?, subject=? WHERE id=?",
+                  (int(y) if str(y or "").isdigit() else None, str(b.get("grade", ""))[:10], str(b.get("sem", ""))[:10],
+                   str(b.get("exam", ""))[:20], str(b.get("subject", ""))[:40], fid))
+    return {"ok": True}
+
+
+@app.delete("/api/admin/gichul/files/{fid}")
+def g_file_del(fid: int, request: Request):
+    admin_of(request)
+    with db() as c:
+        r = c.execute("SELECT path FROM gichul_files WHERE id=?", (fid,)).fetchone()
+        if r:
+            try:
+                os.remove(os.path.join(GICHUL, r["path"]))
+            except FileNotFoundError:
+                pass
+            c.execute("DELETE FROM gichul_files WHERE id=?", (fid,))
+    return {"ok": True}
+
+
+@app.get("/api/admin/gichul/files/{fid}/download")
+def g_file_get(fid: int, request: Request):
+    admin_of(request)
+    with db() as c:
+        r = c.execute("SELECT path, filename FROM gichul_files WHERE id=?", (fid,)).fetchone()
+    if not r:
+        err(404, "파일이 없습니다.")
+    full = os.path.realpath(os.path.join(GICHUL, r["path"]))
+    if not full.startswith(os.path.realpath(GICHUL) + os.sep) or not os.path.exists(full):
+        err(404, "파일이 없습니다.")
+    return FileResponse(full, filename=r["filename"])
 
 @app.get("/api/health")
 def health():
