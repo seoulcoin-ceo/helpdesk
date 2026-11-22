@@ -82,7 +82,7 @@ sudo bash /opt/ipsi/admission/deploy/update_data.sh                      # 데�
 
 ## 검색 노출 (네이버·구글) — 수익화 핵심
 설치 후 아래 두 곳에 사이트를 등록하고 `https://ipsi.isjung.com/sitemap.xml` 을 제출하세요.
-- 네이버 서치어드바이저: https://searchadvisor.naver.com (소유 확인용 HTML 파일을 받아 `/var/www/isjung.com/` 에 올리면 됩니다)
+- 네이버 서치어드바이저: https://searchadvisor.naver.com (소유 확인용 HTML 파일을 받아 `/var/www/ipsi.isjung.com/` 에 올리면 됩니다)
 - 구글 서치 콘솔: https://search.google.com/search-console
 
 대학별 페이지 제목 예: “광운대학교 학과별 경쟁률 10년 추이·입시결과 | 입시나침반”
