@@ -725,7 +725,7 @@
       "<b>입력한 성적은 이 기기의 브라우저에만 저장되며 서버로 전송되지 않습니다.</b></p></div>" +
       '<div class="card"><div class="toolbar"><label>나는<select id="who"><option>재학생</option><option>졸업생</option><option>검정고시</option></select></label>' +
       '<p class="muted small" id="whoNote" style="flex:3 1 320px;margin:0"></p></div>' +
-      '<div class="tabs" role="tablist"><button type="button" data-tab="exam">모의고사·수능</button><button type="button" data-tab="gpa">학생부 내신</button><button type="button" data-tab="ged">검정고시</button></div></div>' +
+      '<div class="tabs" role="tablist"><button type="button" data-tab="exam">모의고사·수능</button><button type="button" data-tab="gpa">학생부 내신</button><button type="button" data-tab="ged">검정고시</button><button type="button" data-tab="record">학생부 기록</button><button type="button" data-tab="counsel">상담 기록</button></div></div>' +
       '<div id="tabBody"></div>' +
       '<div class="callout"><b>합격 가능성 예측은 제공하지 않습니다.</b> 이 화면은 입력한 성적을 정리하고, 정해진 규칙(등급 합, 절대평가 기준)만 계산합니다. ' +
       "대학별 합격선은 각 대학이 발표한 공식 입시결과 원문(대학 상세 페이지)에서, 수능 최저 기준과 반영 방법은 해당 학년도 모집요강에서 확인하세요.</div></section>";
@@ -741,7 +741,9 @@
       });
     }
     function renderTab() {
-      if (s.tab === "gpa") tabGpa(); else if (s.tab === "ged") tabGed(); else tabExam();
+      var t = { gpa: tabGpa, ged: tabGed, record: tabRecord, counsel: tabCounsel }[s.tab] || tabExam;
+      var body = $("#tabBody"), fresh = body.cloneNode(false); body.parentNode.replaceChild(fresh, body);  // 탭마다 붙인 이벤트 정리
+      t();
     }
 
     /* --- 모의고사·수능 --- */
@@ -976,6 +978,120 @@
         '<p class="muted small" style="flex-basis:100%;margin:4px 0 0">평균은 단순 산술평균입니다. 대학별 비교내신 등급은 대학마다 기준이 달라 계산하지 않습니다.</p>';
     }
 
+
+    /* --- 학생부 기록 (학생부종합 준비용) --- */
+    function tabRecord() {
+      var r = s.record = s.record || { hope: "", hopeDept: "", att: {}, cha: {}, seteuk: [], haeng: {} };
+      var YRS = ["1", "2", "3"];
+      var ta = function (path, val, ph, rows) { return '<textarea data-p="' + path + '" rows="' + (rows || 3) + '" placeholder="' + esc(ph || "") + '">' + esc(val || "") + '</textarea><small class="muted cnt">' + (val || "").length + "자</small>"; };
+      $("#tabBody").innerHTML =
+        '<div class="card"><h2>학생부 기록</h2><p class="muted small">학생부종합전형 준비용입니다. 학교에서 받은 학생부(또는 나이스 학생부 조회) 내용을 옮겨 두면, 진로와 활동이 잘 이어지는지 스스로 점검할 수 있습니다. ' +
+        "2024학년도부터 수상경력·독서활동·개인 봉사활동 실적·자율동아리는 대입에 반영되지 않아 입력 칸에서 뺐습니다.</p>" +
+        '<div class="toolbar"><label>희망 진로(직업)<input data-p="hope" value="' + esc(r.hope) + '" placeholder="예: 간호사" /></label>' +
+        '<label>희망 학과<input data-p="hopeDept" value="' + esc(r.hopeDept) + '" placeholder="예: 간호학과" /></label></div>' +
+        '<div class="kpis" id="recCheck"></div></div>' +
+
+        '<div class="card"><h2>세부능력 및 특기사항 (세특)</h2><p class="muted small">과목별로 선생님이 써 주신 내용을 옮겨 적으세요. 학생부종합에서 가장 중요하게 보는 부분입니다.</p>' +
+        '<div id="setList"></div><button class="btn btn-ghost" type="button" id="setAdd">+ 과목 추가</button></div>' +
+
+        '<div class="card"><h2>창의적 체험활동</h2>' + YRS.map(function (y) {
+          var c = r.cha[y] = r.cha[y] || {};
+          return "<h3>" + y + '학년</h3><div class="rec-grid">' +
+            "<label>자율활동" + ta("cha." + y + ".ja", c.ja, "학급·학교 자치 활동, 행사 등") + "</label>" +
+            "<label>동아리활동(정규)" + ta("cha." + y + ".dong", c.dong, "동아리명과 활동 내용") + "</label>" +
+            "<label>진로활동" + ta("cha." + y + ".jin", c.jin, "진로 탐색 활동, 희망 분야") + "</label></div>";
+        }).join("") + "</div>" +
+
+        '<div class="grid-2"><div class="card"><h2>출결</h2><p class="muted small">미인정(무단) 결석·지각·조퇴가 많으면 불리할 수 있습니다. 질병 결석은 대부분 감점이 없습니다.</p>' +
+        '<div class="table-wrap"><table class="data-table compact"><thead><tr><th>학년</th><th class="num">질병 결석</th><th class="num">미인정 결석</th><th class="num">미인정 지각</th><th class="num">미인정 조퇴</th><th class="num">미인정 결과</th></tr></thead><tbody>' +
+        YRS.map(function (y) {
+          var a = r.att[y] = r.att[y] || {};
+          var n = function (k) { return '<td class="num"><input type="number" min="0" max="200" inputmode="numeric" data-p="att.' + y + "." + k + '" value="' + esc(a[k] == null ? "" : a[k]) + '" style="width:64px" /></td>'; };
+          return "<tr><th>" + y + "학년</th>" + n("sick") + n("abs") + n("late") + n("early") + n("miss") + "</tr>";
+        }).join("") + "</tbody></table></div></div>" +
+        '<div class="card"><h2>행동특성 및 종합의견</h2>' + YRS.map(function (y) { return "<label>" + y + "학년" + ta("haeng." + y, r.haeng[y], "담임 선생님 종합의견", 3) + "</label>"; }).join("") + "</div></div>";
+
+      function setRows() {
+        $("#setList").innerHTML = r.seteuk.length ? r.seteuk.map(function (x, i) {
+          return '<div class="set-row" data-i="' + i + '"><div class="toolbar"><label>학년<select data-sk="grade">' + ["1", "2", "3"].map(function (g) { return "<option" + (g === x.grade ? " selected" : "") + ">" + g + "</option>"; }).join("") + "</select></label>" +
+            '<label>과목<input data-sk="subj" value="' + esc(x.subj) + '" placeholder="예: 생명과학Ⅰ" /></label><button class="icon-btn" type="button" data-sdel aria-label="삭제">×</button></div>' +
+            '<textarea data-sk="text" rows="4" placeholder="세특 내용">' + esc(x.text) + '</textarea><small class="muted cnt">' + (x.text || "").length + "자</small></div>";
+        }).join("") : '<p class="empty">‘+ 과목 추가’로 과목별 세특을 입력하세요.</p>';
+      }
+      function check() {
+        var kw = (r.hopeDept + " " + r.hope).replace(/학과|학부|전공|과$/g, " ").split(/[\s,·]+/).filter(function (w) { return w.length >= 2; });
+        var hit = kw.length ? r.seteuk.filter(function (x) { return kw.some(function (w) { return (x.text || "").indexOf(w) >= 0 || (x.subj || "").indexOf(w) >= 0; }); }).length : 0;
+        var bad = 0; Object.keys(r.att).forEach(function (y) { ["abs", "late", "early", "miss"].forEach(function (k) { bad += num(r.att[y][k]) || 0; }); });
+        var chaFilled = 0; Object.keys(r.cha).forEach(function (y) { ["ja", "dong", "jin"].forEach(function (k) { if ((r.cha[y][k] || "").trim()) chaFilled++; }); });
+        $("#recCheck").innerHTML = kpi("세특 입력 과목", r.seteuk.length + "개") +
+          kpi("희망 분야가 드러난 세특", kw.length ? hit + "개" : "희망 학과 입력 필요") +
+          kpi("창체 입력", chaFilled + " / 9칸") + kpi("미인정 결석·지각·조퇴·결과", bad + "회");
+      }
+      $("#tabBody").addEventListener("input", function (e) {
+        var el = e.target, p = el.getAttribute("data-p");
+        if (p) {
+          var parts = p.split("."), o = r;
+          for (var i = 0; i < parts.length - 1; i++) o = o[parts[i]] = o[parts[i]] || {};
+          o[parts[parts.length - 1]] = el.value;
+        }
+        var sk = el.getAttribute("data-sk");
+        if (sk) r.seteuk[+el.closest(".set-row").getAttribute("data-i")][sk] = el.value;
+        if (el.tagName === "TEXTAREA" && el.nextElementSibling && el.nextElementSibling.classList.contains("cnt")) el.nextElementSibling.textContent = el.value.length + "자";
+        save(s); check();
+      });
+      $("#tabBody").addEventListener("change", function (e) {
+        var sk = e.target.getAttribute("data-sk");
+        if (sk && e.target.tagName === "SELECT") { r.seteuk[+e.target.closest(".set-row").getAttribute("data-i")][sk] = e.target.value; save(s); }
+      });
+      $("#setAdd").addEventListener("click", function () { r.seteuk.push({ grade: "1", subj: "", text: "" }); save(s); setRows(); check(); });
+      $("#setList").addEventListener("click", function (e) {
+        if (!e.target.hasAttribute("data-sdel")) return;
+        if (!confirm("이 과목 세특을 지울까요?")) return;
+        r.seteuk.splice(+e.target.closest(".set-row").getAttribute("data-i"), 1); save(s); setRows(); check();
+      });
+      setRows(); check();
+    }
+
+    /* --- 대입 상담 기록 --- */
+    var WHO = ["담임 선생님", "진학 담당 선생님", "학원·컨설턴트", "부모", "대학 입학처", "기타"];
+    function tabCounsel() {
+      var list = s.counsel = s.counsel || [];
+      var today = new Date().toISOString().slice(0, 10);
+      $("#tabBody").innerHTML =
+        '<div class="card"><h2>대입 상담 기록</h2><p class="muted small">상담 날짜·상담자·내용·결정한 것·다음에 할 일을 남겨 두세요. 로그인하면 서버에 저장되고, 연결된 학부모도 함께 볼 수 있습니다.</p>' +
+        '<form id="csForm" class="form"><div class="toolbar"><label>날짜<input type="date" name="date" value="' + today + '" required /></label>' +
+        '<label>상담자<select name="who">' + WHO.map(function (w) { return "<option>" + w + "</option>"; }).join("") + "</select></label>" +
+        '<label>주제<input name="topic" placeholder="예: 수시 6장 조합" /></label><label>다음 상담일<input type="date" name="next" /></label></div>' +
+        '<label>상담 내용<textarea name="content" rows="4" placeholder="들은 조언, 논의한 대학·학과, 성적 이야기 등"></textarea></label>' +
+        '<label>결정한 것 · 해야 할 일<textarea name="todo" rows="2" placeholder="예: 6월 모평 뒤 논술 2곳 추가 검토"></textarea></label>' +
+        '<button class="btn btn-primary" type="submit">기록 추가</button></form></div>' +
+        '<div id="csList"></div>';
+      function paint() {
+        var upcoming = list.filter(function (c) { return c.next && c.next >= today; }).sort(function (a, b) { return a.next < b.next ? -1 : 1; })[0];
+        $("#csList").innerHTML = (upcoming ? '<div class="callout">다음 상담: <b>' + esc(upcoming.next) + "</b> (" + esc(upcoming.who) + (upcoming.topic ? " · " + esc(upcoming.topic) : "") + ")</div>" : "") +
+          (list.length ? list.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (c) {
+            return '<article class="card counsel" data-id="' + esc(c.id) + '"><div class="counsel-head"><b>' + esc(c.date) + "</b> · " + esc(c.who) + (c.topic ? " · " + esc(c.topic) : "") +
+              ' <button class="icon-btn" type="button" data-cdel aria-label="삭제">×</button></div>' +
+              (c.content ? "<p>" + esc(c.content).replace(/\n/g, "<br>") + "</p>" : "") +
+              (c.todo ? '<p class="todo"><b>할 일</b> ' + esc(c.todo).replace(/\n/g, "<br>") + "</p>" : "") +
+              (c.next ? '<p class="muted small">다음 상담 ' + esc(c.next) + "</p>" : "") + "</article>";
+          }).join("") : '<p class="empty">아직 상담 기록이 없습니다.</p>');
+      }
+      $("#csForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var f = this;
+        list.push({ id: newId(), date: f.date.value, who: f.who.value, topic: f.topic.value.trim(), content: f.content.value.trim(), todo: f.todo.value.trim(), next: f.next.value });
+        save(s); f.reset(); f.date.value = today; paint();
+      });
+      $("#csList").addEventListener("click", function (e) {
+        if (!e.target.hasAttribute("data-cdel")) return;
+        if (!confirm("이 상담 기록을 지울까요?")) return;
+        var id = e.target.closest("[data-id]").getAttribute("data-id");
+        s.counsel = list = list.filter(function (c) { return c.id !== id; }); save(s); paint();
+      });
+      paint();
+    }
+
     head(); renderTab();
   }
 
@@ -1119,7 +1235,7 @@
       .catch(function (e) { syncState = "서버 저장 실패: " + e.message; showSync(); });
   }
   function showSync() { var el = $("#syncNote"); if (el) el.textContent = syncState; }
-  function hasContent(s) { return !!(s && ((s.exams && s.exams.length) || (s.gpa && s.gpa.rows && s.gpa.rows.length) || (s.fav && s.fav.length))); }
+  function hasContent(s) { return !!(s && ((s.exams && s.exams.length) || (s.gpa && s.gpa.rows && s.gpa.rows.length) || (s.fav && s.fav.length) || (s.counsel && s.counsel.length) || (s.record && s.record.seteuk && s.record.seteuk.length))); }
   // 로그인 직후: 서버 자료와 이 기기 자료를 맞춘다
   function pullData() {
     if (!canSync()) return Promise.resolve();
@@ -1369,11 +1485,23 @@
             "</tbody></table></div>" : '<p class="muted">입력된 시험 성적이 없습니다.</p>') + "</div>" +
           '<div class="grid-2"><div class="card"><h2>내신 평균등급</h2><p class="kpi-big">' + (un ? (sum / un).toFixed(2) + "등급" : "-") + '</p><p class="muted small">전과목, ' + un + "단위 · " + mx + "등급제</p></div>" +
           '<div class="card"><h2>관심 대학</h2>' + (fav.length ? '<ul class="plain">' + fav.map(function (f) { return '<li><a href="#/univ/' + esc(f.code) + '">' + esc(f.name) + "</a></li>"; }).join("") + "</ul>" : '<p class="muted">없음</p>') + "</div></div>" +
+          childRecord(d) +
           '<div class="card"><h2>합격·불합격 결과</h2>' + (c.reports.length ? '<ul class="plain">' + c.reports.map(function (r) {
             return "<li>" + r.year + " " + esc(r.track) + " · " + esc(r.univ_name) + " " + esc(r.dept) + " — <b>" + esc(r.result) + "</b></li>";
           }).join("") + "</ul>" : '<p class="muted">없음</p>') + "</div></section>";
       }).catch(function (e) { view.innerHTML = '<section class="section"><p>' + esc(e.message) + "</p></section>"; });
     });
+  }
+
+  function childRecord(d) {
+    var r = d.record || {}, cs = (d.counsel || []).slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    return '<div class="grid-2"><div class="card"><h2>학생부 기록</h2>' +
+      (r.hope || r.hopeDept ? "<p>희망: <b>" + esc([r.hope, r.hopeDept].filter(Boolean).join(" · ")) + "</b></p>" : "") +
+      "<p>세특 " + ((r.seteuk || []).length) + "과목 입력</p>" +
+      ((r.seteuk || []).length ? '<ul class="plain small">' + r.seteuk.map(function (x) { return "<li><b>" + esc(x.grade) + "학년 " + esc(x.subj) + "</b> " + esc((x.text || "").slice(0, 80)) + ((x.text || "").length > 80 ? "…" : "") + "</li>"; }).join("") + "</ul>" : "") +
+      '</div><div class="card"><h2>상담 기록</h2>' + (cs.length ? cs.map(function (c) {
+        return '<div class="counsel"><b>' + esc(c.date) + "</b> · " + esc(c.who) + (c.topic ? " · " + esc(c.topic) : "") + (c.content ? "<p>" + esc(c.content).replace(/\n/g, "<br>") + "</p>" : "") + (c.todo ? '<p class="todo"><b>할 일</b> ' + esc(c.todo) + "</p>" : "") + "</div>";
+      }).join("") : '<p class="muted">없음</p>') + "</div></div>";
   }
 
   /* --- 관심 대학 버튼 (대학 상세) --- */
