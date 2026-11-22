@@ -498,7 +498,23 @@
     if (g >= 1 && g <= 9) return Math.round(g);
     var area = AREAS.filter(function (x) { return x.k === k; })[0];
     if (area && area.abs) return absGrade(area.abs, a.raw);
-    return null;
+    return pctGrade(a.pct);
+  }
+  // 상대평가 영역: 수능 등급은 누적 비율 4·11·23·40·60·77·89·96% 로 나뉜다. 백분위로 등급을 구한다
+  // (동점자 처리 때문에 경계 근처에서는 성적표 등급과 1등급 차이가 날 수 있어 '백분위 기준'으로 표시)
+  function pctGrade(p) {
+    var v = num(p);
+    if (v == null || v < 0 || v > 100) return null;
+    var cut = [96, 89, 77, 60, 40, 23, 11, 4];
+    for (var i = 0; i < cut.length; i++) if (v >= cut[i]) return i + 1;
+    return 9;
+  }
+  function gradeNote(rec, k) {
+    var a = rec.s && rec.s[k] || {};
+    if (num(a.grade) >= 1) return "";
+    var area = AREAS.filter(function (x) { return x.k === k; })[0];
+    if (area.abs) return num(a.raw) != null ? "원점수 기준" : "";
+    return num(a.pct) != null ? "백분위 기준" : "";
   }
   // 수능 최저: 대상 영역에서 필수 영역을 넣고 나머지는 좋은 등급부터 채워 합산
   function minCheck(rec, r) {
@@ -602,7 +618,7 @@
         var a = tr.getAttribute("data-a");
         rec.s[a] = rec.s[a] || {}; rec.s[a][k] = e.target.value; save(s);
         var area = AREAS.filter(function (x) { return x.k === a; })[0];
-        if (area.abs) { var g = absGrade(area.abs, rec.s[a].raw); $(".auto", tr).textContent = g ? "→ " + g + "등급" : ""; }
+        var g = num(rec.s[a].grade) >= 1 ? null : gradeOf(rec, a); $(".auto", tr).textContent = g ? "→ " + g + "등급" : "";
         validate(e.target, area, k);
         updMin(rec); updSum(rec);
       });
@@ -613,7 +629,7 @@
     function examHint(e) {
       if (e.kind === "수능 가채점") return "가채점은 <b>원점수</b>만 정확합니다. 국어·수학·탐구의 등급·표준점수·백분위는 성적표가 나오기 전까지 입시기관 추정 등급컷에 따른 <b>예상값</b>이므로, 입력하더라도 실제와 다를 수 있습니다. 영어·한국사 등급은 절대평가라 원점수로 정확히 계산됩니다.";
       if (e.kind === "수능 성적표(실채점)") return "수능 성적표에는 원점수가 나오지 않습니다. 성적표의 <b>표준점수·백분위·등급</b>을 그대로 입력하세요(영어·한국사는 등급만).";
-      return "성적표의 원점수·표준점수·백분위·등급을 그대로 입력하세요. 모르는 칸은 비워 두면 됩니다. 영어·한국사는 원점수만 넣으면 등급이 자동 계산됩니다.";
+      return "성적표의 원점수·표준점수·백분위·등급을 그대로 입력하세요. 모르는 칸은 비워 두면 됩니다. 등급 칸을 비우면 영어·한국사는 원점수로, 국어·수학·탐구는 백분위로 등급을 계산합니다(백분위 기준 등급은 경계 근처에서 성적표와 다를 수 있음). 원점수만으로는 국어·수학·탐구 등급을 정할 수 없습니다(시험마다 등급컷이 다름).";
     }
     function examForm(e) {
       return '<div class="toolbar" id="eMeta">' +
@@ -627,12 +643,12 @@
           var v = e.s[a.k] || {};
           var sel = a.sel ? '<select data-k="sub">' + a.sel.map(function (x) { return '<option value="' + esc(x) + '"' + (x === (v.sub || "") ? " selected" : "") + ">" + (x || "선택") + "</option>"; }).join("") + "</select>" : '<span class="muted small">절대평가</span>';
           var inp = function (k, max, ph) { return '<input data-k="' + k + '" type="number" min="0" max="' + max + '" step="any" inputmode="decimal" value="' + esc(v[k] == null ? "" : v[k]) + '" placeholder="' + (ph || "") + '" />'; };
-          var g = a.abs ? absGrade(a.abs, v.raw) : null;
+          var g = num(v.grade) >= 1 ? null : gradeOf(e, a.k);
           return '<tr data-a="' + a.k + '"><th>' + a.n + "</th><td>" + sel + "</td>" +
             '<td class="num">' + inp("raw", a.raw, "0~" + a.raw) + "</td>" +
             '<td class="num">' + (a.std ? inp("std", a.std) : '<span class="muted">-</span>') + "</td>" +
             '<td class="num">' + (a.std ? inp("pct", 100, "0~100") : '<span class="muted">-</span>') + "</td>" +
-            '<td class="num">' + inp("grade", 9, "1~9") + (a.abs ? ' <small class="auto muted">' + (g ? "→ " + g + "등급" : "") + "</small>" : "") + "</td></tr>";
+            '<td class="num">' + inp("grade", 9, "1~9") + ' <small class="auto muted">' + (g ? "→ " + g + "등급" : "") + "</small></td></tr>";
         }).join("") + "</tbody></table></div>" +
         '<div class="kpis wide" id="eSum"></div>';
     }
@@ -645,8 +661,8 @@
     function updSum(rec) {
       var g = function (k) { return gradeOf(rec, k); };
       var pick = function (k, f) { var v = num(rec.s[k] && rec.s[k][f]); return v; };
-      var items = [["국어", g("kor")], ["수학", g("math")], ["영어", g("eng")], ["탐구1", g("t1")], ["탐구2", g("t2")], ["한국사", g("his")]]
-        .map(function (x) { return '<div class="kpi"><span>' + x[0] + "</span><strong>" + (x[1] ? x[1] + "등급" : "-") + "</strong></div>"; });
+      var items = [["국어", "kor"], ["수학", "math"], ["영어", "eng"], ["탐구1", "t1"], ["탐구2", "t2"], ["한국사", "his"]]
+        .map(function (x) { var v = g(x[1]), n = gradeNote(rec, x[1]); return '<div class="kpi"><span>' + x[0] + "</span><strong>" + (v ? v + "등급" : "-") + "</strong>" + (v && n ? "<small>" + n + "</small>" : "") + "</div>"; });
       var pk = pick("kor", "pct"), pm = pick("math", "pct"), p1 = pick("t1", "pct"), p2 = pick("t2", "pct");
       if (pk != null && pm != null && p1 != null && p2 != null)
         items.push('<div class="kpi"><span>백분위 합 (국+수+탐2과목)</span><strong>' + fmtG(pk + pm + p1 + p2) + "</strong><small>참고용 단순 합</small></div>");
