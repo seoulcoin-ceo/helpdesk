@@ -146,6 +146,24 @@ def is_heading(l):
     return digits / max(1, len(l)) < 0.25
 
 
+def cut_words(tb, words):
+    """칸 테두리를 가로질러 잘린 글자(단어)가 있으면 True — 머리글/값이 쪼개져 잘못 읽힐 수 있음"""
+    for row in tb.rows:
+        for box in row.cells:
+            if not box:
+                continue
+            x0, top, x1, bottom = box
+            for w in words:
+                cy = (w["top"] + w["bottom"]) / 2
+                if not (top < cy < bottom):
+                    continue
+                inside = w["x0"] >= x0 - 1 and w["x1"] <= x1 + 1
+                overlap = w["x0"] < x1 - 1 and w["x1"] > x0 + 1
+                if overlap and not inside:
+                    return True
+    return False
+
+
 def title_above(page, bbox, prev_bottom):
     """표 바로 위(이전 표 아래 ~ 이 표 위)의 소제목 줄을 찾는다. 상위 절 제목(1. 2. …)이 있으면 앞에 붙인다."""
     try:
@@ -173,6 +191,7 @@ def extract(fn):
             text_chars += len(ptxt.strip())
             if not ptxt.strip():
                 continue
+            words = page.extract_words(keep_blank_chars=False, use_text_flow=False)
             prev_bottom = 0
             for tb in sorted(page.find_tables(), key=lambda x: x.bbox[1]):
                 pb, prev_bottom = prev_bottom, tb.bbox[3]
@@ -204,6 +223,8 @@ def extract(fn):
                         r[0] = prev
                     prev = r[0]
                 if not table_ok(cols, body, ptxt):
+                    continue
+                if cut_words(tb, words):
                     continue
                 title = title_above(page, tb.bbox, pb)
                 if re.match(r"^\d{1,2}[.)]", title):
@@ -256,10 +277,20 @@ def main():
     for code, d in details.items():
         if d["kind"] in ("사이버대학(대학)", "방송통신대학"):
             continue
+        # 같은 PDF 가 수시·정시 또는 여러 캠퍼스에 중복 등록된 경우 하나로 합친다
+        byurl = {}
         for e in d.get("documents", []):
             for k, label in KINDS.items():
                 if e.get(k) and e["year"] in years:
-                    jobs.append((code, {"year": e["year"], "season": label, "campus": e.get("campus", ""), "url": e[k]}))
+                    x = byurl.setdefault(e[k], {"year": e["year"], "seasons": [], "campuses": [], "url": e[k]})
+                    if label not in x["seasons"]:
+                        x["seasons"].append(label)
+                    if e.get("campus", "") not in x["campuses"]:
+                        x["campuses"].append(e.get("campus", ""))
+        multi_campus = len({c for x in byurl.values() for c in x["campuses"]}) > 1
+        for x in byurl.values():
+            jobs.append((code, {"year": x["year"], "season": "·".join(sorted(x["seasons"], key=lambda v: v != "수시")),
+                                "campus": "·".join(x["campuses"]) if multi_campus else "", "url": x["url"]}))
     print(f"원문 {len(jobs)}개 처리 (학년도 {sorted(years)})")
     os.makedirs(OUT, exist_ok=True)
     res = {}
@@ -273,7 +304,19 @@ def main():
     for f in os.listdir(OUT):
         os.remove(os.path.join(OUT, f))
     summary, stat = {}, {}
-    for code, docs in res.items():
+    for code, docs in list(res.items()):
+        # 내용(추출 표)이 같은 원문은 하나로 합친다
+        merged = {}
+        for x in docs:
+            key = (x["year"], json.dumps(x["tables"], ensure_ascii=False)) if x["tables"] else (x["url"],)
+            if key in merged:
+                m = merged[key]
+                for f in ("season", "campus"):
+                    vals = [v for v in (m[f].split("·") + x[f].split("·")) if v]
+                    m[f] = "·".join(sorted(dict.fromkeys(vals), key=lambda v: v != "수시"))
+            else:
+                merged[key] = dict(x)
+        docs = res[code] = list(merged.values())
         docs.sort(key=lambda x: (-x["year"], x["season"], x["campus"]))
         for x in docs:
             stat[x["status"]] = stat.get(x["status"], 0) + 1
