@@ -39,40 +39,43 @@ admission/
 └── deploy/                         우분투 서버 설치 스크립트, nginx 설정
 ```
 
-## 우분투 서버에 설치 — ipsi.isjung.com (사내 서버 192.168.0.7)
+## 우분투 서버(sc-kdb)에 설치 — https://ipsi.isjung.com
 
-입시 사이트는 **ipsi.isjung.com** 으로 엽니다. 기존 **isjung.com(서울전자 업무시스템)은 건드리지 않습니다.**
-isjung.com 은 Cloudflare 를 거치므로 HTTPS 는 Cloudflare 가 처리하고, 서버는 사내망에서 80 포트만 엽니다.
+| 항목 | 값 |
+|---|---|
+| 서버 | sc-kdb (우분투). IP 는 바뀔 수 있으므로 **localhost** 기준으로 연결 |
+| 포트 | **8500** (127.0.0.1 에서만 응답). **80 포트는 기존 kdb 사이트용이라 사용하지 않음** |
+| 외부 공개 | Cloudflare 터널 `/etc/cloudflared/config.yml` 에 `ipsi.isjung.com → http://localhost:8500` |
+| HTTPS | Cloudflare 가 처리. http 로 들어오면 https 로 이동(301) + HSTS |
 
-### 1. 서버(192.168.0.7)에서 설치
+### 1. 사이트 설치 (8500 포트)
 ```bash
-cat /etc/os-release            # Ubuntu 인지 확인
 sudo apt-get update && sudo apt-get install -y git
 sudo git clone -b claude/university-admission-info-site-eyllo8 https://github.com/seoulcoin-ceo/helpdesk.git /opt/ipsi
 sudo bash /opt/ipsi/admission/deploy/install.sh
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8500/      # 200 이면 정상
 ```
-확인 (같은 사내망 PC 에서): `curl -H "Host: ipsi.isjung.com" http://192.168.0.7/` → HTML 이 나오면 정상.
+- nginx 를 새로 설치하는 경우 설치 중 자동 시작과 기본(80) 사이트를 막아 kdb 사이트와 충돌하지 않습니다.
+- 이미 nginx 가 있으면 다른 사이트 설정은 건드리지 않고 입시 사이트 파일만 추가합니다.
+- 방화벽(ufw)은 변경하지 않습니다.
 
-### 2. Cloudflare 에서 주소 연결 (HTTPS 전용)
-방문자는 **항상 https://ipsi.isjung.com** 으로만 접속됩니다. http 로 들어오면 서버가 https 로 이동시키고(301), 브라우저에 HTTPS 고정(HSTS)을 알립니다.
+### 2. Cloudflare 터널 연결 (config.yml)
+```bash
+sudo bash /opt/ipsi/admission/deploy/cloudflared_add.sh
+```
+1. `/etc/cloudflared/config.yml` 백업 (`config.yml.bak-날짜시각`)
+2. ingress 마지막 404 규칙 앞에 `- hostname: ipsi.isjung.com / service: http://localhost:8500` 추가 (이미 있으면 건너뜀)
+3. `cloudflared tunnel ingress validate` 로 검증 — 실패하면 백업으로 자동 복구
+4. `cloudflared tunnel route dns <터널> ipsi.isjung.com` 로 DNS 연결
+5. `systemctl restart cloudflared` 후 https://ipsi.isjung.com 응답 확인
 
-**A. Cloudflare 터널(cloudflared) — 사내 서버라면 이 방식 권장**
-1. Cloudflare → Zero Trust → Networks → Tunnels → isjung.com 에 쓰는 터널 → *Public Hostname* → **Add a public hostname**
-2. Subdomain `ipsi`, Domain `isjung.com`, Service `HTTP`, URL `192.168.0.7:80` → 저장
-3. 터널 구간은 Cloudflare 가 암호화하므로 서버 인증서가 필요 없습니다. 방문자 구간 HTTPS 인증서는 Cloudflare 가 자동 발급합니다.
+되돌리기: `sudo cp -p /etc/cloudflared/config.yml.bak-<날짜시각> /etc/cloudflared/config.yml && sudo systemctl restart cloudflared`
 
-**B. Cloudflare 프록시(주황 구름) + 공유기 포트포워딩**
-1. Cloudflare → SSL/TLS → Origin Server → **Create Certificate** (호스트 `ipsi.isjung.com`) → 인증서·키를 서버에 저장
-   (`/etc/ssl/cloudflare/ipsi.pem`, `/etc/ssl/cloudflare/ipsi.key`, 권한 600)
-2. 서버에서: `sudo TLS_CERT=/etc/ssl/cloudflare/ipsi.pem TLS_KEY=/etc/ssl/cloudflare/ipsi.key bash /opt/ipsi/admission/deploy/install.sh`
-3. Cloudflare → SSL/TLS → 암호화 모드 **Full (strict)**, DNS 에 `ipsi` 레코드(프록시 켬) 추가
-4. 공유기 443 포트가 이미 업무시스템 서버로 가고 있다면, 그 서버에서 `ipsi.isjung.com` 요청을 `https://192.168.0.7` 로 넘겨야 합니다.
-
-**공통 권장 설정 (Cloudflare → SSL/TLS → Edge Certificates)**: *Always Use HTTPS* 켬, *Minimum TLS Version* 1.2
+권장 (Cloudflare 대시보드 → SSL/TLS → Edge Certificates): *Always Use HTTPS* 켬, *Minimum TLS Version* 1.2
 
 ### 3. 업데이트 · 데이터 갱신
 ```bash
-cd /opt/ipsi && sudo git pull && sudo bash admission/deploy/install.sh   # 코드 업데이트
+cd /opt/ipsi && sudo git pull && sudo bash admission/deploy/install.sh   # 코드 업데이트 (8500 포트 유지)
 sudo bash /opt/ipsi/admission/deploy/update_data.sh                      # 데이터 수동 갱신
 ```
 매월 1일 새벽 자동 갱신이 등록됩니다(`/etc/cron.d/ipsi-data`, 로그 `/var/log/ipsi-data.log`).
