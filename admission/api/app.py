@@ -82,6 +82,11 @@ def db():
 
 with db() as _c:
     _c.executescript(SCHEMA)
+    _cols = [r[1] for r in _c.execute("PRAGMA table_info(users)")]
+    if "staff" not in _cols:  # 운영 권한: '' | 'operator' | 'admin'
+        _c.execute("ALTER TABLE users ADD COLUMN staff TEXT NOT NULL DEFAULT ''")
+    if "last_login" not in _cols:
+        _c.execute("ALTER TABLE users ADD COLUMN last_login INTEGER")
 
 
 def h(token):
@@ -126,6 +131,7 @@ async def csrf(request: Request, call_next):
 def new_session(resp, user_id):
     token = secrets.token_urlsafe(32)
     with db() as c:
+        c.execute("UPDATE users SET last_login=? WHERE id=?", (now(), user_id))
         c.execute("DELETE FROM sessions WHERE expires<?", (now(),))
         c.execute("INSERT INTO sessions VALUES(?,?,?)", (h(token), user_id, now() + SESSION_DAYS * 86400))
     resp.set_cookie(COOKIE, token, max_age=SESSION_DAYS * 86400, httponly=True, secure=SECURE, samesite="lax", path="/")
@@ -149,14 +155,22 @@ ADMINS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",
 
 
 def is_admin(u):
-    return bool(u["email"]) and u["email"].lower() in ADMINS and bool(u["consent_at"])
+    """관리자: ADMIN_EMAILS 에 적힌 이메일(최초 관리자) 또는 관리자가 지정한 회원"""
+    if not u["consent_at"]:
+        return False
+    return (bool(u["email"]) and u["email"].lower() in ADMINS) or u["staff"] == "admin"
+
+
+def is_staff(u):
+    """운영자 이상"""
+    return is_admin(u) or (bool(u["consent_at"]) and u["staff"] == "operator")
 
 
 def public(u):
     with db() as c:
         prov = [r["provider"] for r in c.execute("SELECT provider FROM identities WHERE user_id=?", (u["id"],))]
     return {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"], "providers": prov,
-            "needConsent": not u["consent_at"], "reportConsent": bool(u["report_consent"]), "isAdmin": is_admin(u)}
+            "needConsent": not u["consent_at"], "reportConsent": bool(u["report_consent"]), "isAdmin": is_admin(u), "isStaff": is_staff(u)}
 
 
 def consent_ok(b):
@@ -492,8 +506,17 @@ GICHUL_EXT = (".hwp", ".hwpx", ".pdf", ".zip", ".doc", ".docx", ".jpg", ".jpeg",
 
 
 def admin_of(request):
+    """관리자만"""
     u = user_of(request)
     if not is_admin(u):
+        err(404, "없는 주소입니다.")
+    return u
+
+
+def staff_of(request):
+    """운영자 이상"""
+    u = user_of(request)
+    if not is_staff(u):
         err(404, "없는 주소입니다.")
     return u
 
@@ -514,7 +537,7 @@ def safe_name(n):
 
 @app.get("/api/admin/gichul/schools")
 def g_schools(request: Request):
-    admin_of(request)
+    staff_of(request)
     with db() as c:
         st = {r["code"]: dict(r) for r in c.execute("SELECT * FROM gichul_school")}
         cnt = {r["school_code"]: r["n"] for r in c.execute("SELECT school_code, COUNT(*) n FROM gichul_files GROUP BY school_code")}
@@ -530,7 +553,7 @@ def g_schools(request: Request):
 
 @app.put("/api/admin/gichul/schools/{code}")
 def g_school_set(code: str, request: Request, b: dict = Body(...)):
-    admin_of(request)
+    staff_of(request)
     status = b.get("status", "")
     if status not in GICHUL_STATUS:
         err(400, "상태 값이 잘못되었습니다.")
@@ -543,7 +566,7 @@ def g_school_set(code: str, request: Request, b: dict = Body(...)):
 async def g_upload(request: Request, school: str, name: str, year: int = 0, grade: str = "", sem: str = "", exam: str = "",
                    subject: str = "", src: str = ""):
     """파일 본문을 그대로 보낸다 (쿼리: 학교코드·원래 파일명·분류)"""
-    admin_of(request)
+    staff_of(request)
     sch = next((r for r in gichul_schools() if r["학교코드"] == school), None)
     if not sch:
         err(400, "학교를 찾을 수 없습니다.")
@@ -580,7 +603,7 @@ async def g_upload(request: Request, school: str, name: str, year: int = 0, grad
 
 @app.get("/api/admin/gichul/files")
 def g_files(request: Request, school: str = ""):
-    admin_of(request)
+    staff_of(request)
     with db() as c:
         q = "SELECT id,school_code,school_name,year,grade,sem,exam,subject,filename,size,src_url,created FROM gichul_files"
         rows = c.execute(q + (" WHERE school_code=?" if school else "") + " ORDER BY school_name, year DESC, sem, exam, subject",
@@ -590,7 +613,7 @@ def g_files(request: Request, school: str = ""):
 
 @app.put("/api/admin/gichul/files/{fid}")
 def g_file_edit(fid: int, request: Request, b: dict = Body(...)):
-    admin_of(request)
+    staff_of(request)
     y = b.get("year")
     with db() as c:
         c.execute("UPDATE gichul_files SET year=?, grade=?, sem=?, exam=?, subject=? WHERE id=?",
@@ -601,7 +624,7 @@ def g_file_edit(fid: int, request: Request, b: dict = Body(...)):
 
 @app.delete("/api/admin/gichul/files/{fid}")
 def g_file_del(fid: int, request: Request):
-    admin_of(request)
+    staff_of(request)
     with db() as c:
         r = c.execute("SELECT path FROM gichul_files WHERE id=?", (fid,)).fetchone()
         if r:
@@ -615,7 +638,7 @@ def g_file_del(fid: int, request: Request):
 
 @app.get("/api/admin/gichul/files/{fid}/download")
 def g_file_get(fid: int, request: Request):
-    admin_of(request)
+    staff_of(request)
     with db() as c:
         r = c.execute("SELECT path, filename FROM gichul_files WHERE id=?", (fid,)).fetchone()
     if not r:
@@ -624,6 +647,88 @@ def g_file_get(fid: int, request: Request):
     if not full.startswith(os.path.realpath(GICHUL) + os.sep) or not os.path.exists(full):
         err(404, "파일이 없습니다.")
     return FileResponse(full, filename=r["filename"])
+
+
+# ---------- 관리자·운영자: 현황·회원·결과 제보 ----------
+@app.get("/api/admin/stats")
+def a_stats(request: Request):
+    staff_of(request)
+    t = now()
+    with db() as c:
+        one = lambda q, *a: c.execute(q, a).fetchone()[0]
+        out = {
+            "users": one("SELECT COUNT(*) FROM users WHERE consent_at IS NOT NULL"),
+            "students": one("SELECT COUNT(*) FROM users WHERE consent_at IS NOT NULL AND role='student'"),
+            "parents": one("SELECT COUNT(*) FROM users WHERE consent_at IS NOT NULL AND role='parent'"),
+            "new7": one("SELECT COUNT(*) FROM users WHERE created>?", t - 7 * 86400),
+            "new30": one("SELECT COUNT(*) FROM users WHERE created>?", t - 30 * 86400),
+            "active7": one("SELECT COUNT(*) FROM users WHERE last_login>?", t - 7 * 86400),
+            "withData": one("SELECT COUNT(*) FROM userdata"),
+            "links": one("SELECT COUNT(*) FROM links"),
+            "reportConsent": one("SELECT COUNT(*) FROM users WHERE report_consent=1"),
+            "reports": one("SELECT COUNT(*) FROM reports"),
+            "social": {r[0]: r[1] for r in c.execute("SELECT provider, COUNT(*) FROM identities GROUP BY provider")},
+            "gichulFiles": one("SELECT COUNT(*) FROM gichul_files"),
+            "daily": [dict(r) for r in c.execute(
+                "SELECT date(created,'unixepoch','+9 hours') d, COUNT(*) n FROM users WHERE created>? GROUP BY d ORDER BY d", (t - 30 * 86400,))],
+        }
+    return out
+
+
+@app.get("/api/admin/users")
+def a_users(request: Request, q: str = ""):
+    """회원 목록 (성적 등 개인 기록은 보여 주지 않는다)"""
+    staff_of(request)
+    with db() as c:
+        rows = c.execute("SELECT u.id,u.email,u.name,u.role,u.staff,u.created,u.last_login,u.consent_at,u.report_consent,"
+                         "(SELECT group_concat(provider) FROM identities i WHERE i.user_id=u.id) providers,"
+                         "(SELECT COUNT(*) FROM reports r WHERE r.user_id=u.id) reports "
+                         "FROM users u WHERE (?='' OR u.email LIKE ? OR u.name LIKE ?) ORDER BY u.id DESC LIMIT 500",
+                         (q, f"%{q}%", f"%{q}%")).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["admin"] = bool(d["email"]) and d["email"].lower() in ADMINS
+        out.append(d)
+    return out
+
+
+@app.put("/api/admin/users/{uid}")
+def a_user_set(uid: int, request: Request, b: dict = Body(...)):
+    me_ = admin_of(request)
+    staff = b.get("staff", "")
+    if staff not in ("", "operator", "admin"):
+        err(400, "역할 값이 잘못되었습니다.")
+    if uid == me_["id"] and staff != "admin" and not (me_["email"] and me_["email"].lower() in ADMINS):
+        err(400, "자기 자신의 관리자 권한은 다른 관리자가 해제해야 합니다.")
+    with db() as c:
+        c.execute("UPDATE users SET staff=? WHERE id=?", (staff, uid))
+    return {"ok": True}
+
+
+@app.delete("/api/admin/users/{uid}")
+def a_user_del(uid: int, request: Request):
+    me_ = admin_of(request)
+    if uid == me_["id"]:
+        err(400, "자기 계정은 ‘내 계정’에서 탈퇴하세요.")
+    with db() as c:
+        for sql in ("DELETE FROM sessions WHERE user_id=?", "DELETE FROM identities WHERE user_id=?",
+                    "DELETE FROM userdata WHERE user_id=?", "DELETE FROM reports WHERE user_id=?",
+                    "DELETE FROM links WHERE student_id=? OR parent_id=?", "DELETE FROM link_codes WHERE student_id=?",
+                    "DELETE FROM users WHERE id=?"):
+            c.execute(sql, (uid,) * sql.count("?"))
+    return {"ok": True}
+
+
+@app.get("/api/admin/reports")
+def a_reports(request: Request):
+    """결과 제보 — 통계 동의한 회원 것만, 누가 썼는지는 빼고 보여 준다"""
+    staff_of(request)
+    with db() as c:
+        rows = c.execute("SELECT r.year,r.track,r.univ_code,r.univ_name,r.dept,r.jeonhyeong,r.result,r.created,"
+                         "(r.snapshot IS NOT NULL) has_score FROM reports r JOIN users u ON u.id=r.user_id "
+                         "WHERE u.report_consent=1 ORDER BY r.id DESC LIMIT 2000").fetchall()
+    return [dict(r) for r in rows]
 
 @app.get("/api/health")
 def health():

@@ -299,3 +299,22 @@ textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(
 .counsel p { margin: 6px 0 0; }
 .todo { background: var(--primary-soft); border-radius: 8px; padding: 6px 10px; }
 @media (max-width: 820px) { .rec-grid { grid-template-columns: 1fr; } }
+/* 학과·진로 */
+.field-tabs { margin-bottom: 16px; }
+.chip.is-active { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.career-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.career h2 { margin-bottom: 8px; }
+.eyebrow-sm { margin: 0; font-size: .78rem; font-weight: 700; color: var(--primary); }
+.career dl { margin: 12px 0; display: grid; gap: 2px; }
+.career dt { font-weight: 700; font-size: .85rem; color: var(--muted); margin-top: 8px; }
+.career dd { margin: 0; }
+.kpis.mini .kpi { padding: 6px 12px; min-width: 0; flex: 1; }
+.kpis.mini .kpi strong { font-size: 1.05rem; }
+@media (max-width: 820px) { .career-grid { grid-template-columns: 1fr; } }
+/* 관리 */
+.tabs-a { font-weight: 700; padding: 8px 16px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--text); text-decoration: none; }
+.tabs-a.is-active { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.bars { display: flex; align-items: flex-end; gap: 4px; height: 160px; }
+.bar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+.bar i { display: block; width: 100%; background: var(--primary); border-radius: 4px 4px 0 0; min-height: 2px; }
+.bar small { font-size: .65rem; color: var(--muted); }

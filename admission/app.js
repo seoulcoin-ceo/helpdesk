@@ -45,7 +45,8 @@
     var h = location.hash.replace(/^#\/?/, "");
     var parts = h.split("?")[0].split("/").map(function (x) { try { return decodeURIComponent(x); } catch (e) { return x; } });
     var q = new URLSearchParams(h.split("?")[1] || "");
-    $all(".site-nav a").forEach(function (a) { a.classList.toggle("is-active", a.getAttribute("data-nav") === parts[0]); });
+    var navKey = parts[0] === "guide" && q.get("s") === "strategy" ? "strategy" : parts[0] === "college" || parts[0] === "dept" ? "univ" : parts[0] === "major" ? "careers" : parts[0];
+    $all(".site-nav a").forEach(function (a) { a.classList.toggle("is-active", a.getAttribute("data-nav") === navKey); });
     $(".site-nav").classList.remove("open");
     var p;
     switch (parts[0]) {
@@ -55,7 +56,8 @@
       case "calc": p = pageCalc(); break;
       case "chance": p = pageChance(q); break;
       case "major": p = pageMajor(parts[1]); break;
-      case "admin": p = parts[1] === "gichul" ? pageGichul() : pageHome(); break;
+      case "careers": p = pageCareers(q); break;
+      case "admin": p = pageAdmin(parts[1]); break;
       case "login": p = pageLogin(q); break;
       case "signup": p = pageSignup(); break;
       case "account": p = pageAccount(); break;
@@ -481,6 +483,42 @@
       $("#pField").addEventListener("change", function () { st.field = this.value; render(); });
       $("#pSort").addEventListener("change", function () { st.sort = this.value; render(); });
       render();
+    });
+  }
+
+  /* ---------- 학과·진로 ---------- */
+  function pageCareers(q) {
+    var C = window.CAREERS || [];
+    return majorsIndex().catch(function () { return { majors: [] }; }).then(function (ix) {
+      var fields = uniq(C.map(function (c) { return c.field; }));
+      var cur = q.get("f") || "";
+      function stats(c) {
+        var ms = ix.majors.filter(function (m) { return c.mids.indexOf(m.mid) >= 0 && (!c.fieldOnly || m.field === c.fieldOnly) && (c.fieldOnly || m.field !== "광역계열"); });
+        var rec = 0, app = 0, und = 0, n = 0;
+        ms.forEach(function (m) { rec += m.rec; app += (m.rate || 0) * m.rec; if (m.underShare != null) { und += m.underShare * m.nUniv; n += m.nUniv; } });
+        return { rec: rec, rate: rec ? app / rec : null, under: n ? und / n : null, ms: ms };
+      }
+      function majorLink(name) {
+        var m = ix.majors.filter(function (x) { return x.name === name || x.aliases.indexOf(name) >= 0; })[0];
+        return m ? '<a class="chip" href="#/major/' + m.id + '">' + esc(name) + " <small>" + m.nUniv + "개 대학</small></a>" : '<span class="chip">' + esc(name) + "</span>";
+      }
+      view.innerHTML = '<section class="section"><div class="section-head"><h1>학과·진로</h1>' +
+        "<p>학과 이름만 보고 지원하면 입학 뒤에 ‘생각했던 공부가 아니었다’는 일이 많습니다. 계열·학과군별로 <b>무엇을 배우는지, 어떤 학생에게 맞는지, 고등학교 때 어떤 과목을 들으면 좋은지, 졸업 후 어떤 일을 하는지</b> 정리했습니다. " +
+        "학과를 누르면 전국 개설 대학과 10년 경쟁률·미달 추이를 볼 수 있습니다.</p></div>" +
+        '<div class="chips field-tabs"><a class="chip' + (cur ? "" : " is-active") + '" href="#/careers">전체</a>' +
+        fields.map(function (f) { return '<a class="chip' + (f === cur ? " is-active" : "") + '" href="#/careers?f=' + encodeURIComponent(f) + '">' + esc(f) + "</a>"; }).join("") + "</div>" +
+        '<div class="career-grid">' + C.filter(function (c) { return !cur || c.field === cur; }).map(function (c) {
+          var st = stats(c);
+          return '<article class="card career"><p class="eyebrow-sm">' + esc(c.field) + "</p><h2>" + esc(c.title) + "</h2>" +
+            '<div class="kpis mini">' + kpi("전국 모집", fmtInt(st.rec) + "명") + kpi("평균 경쟁률", fmtRate(st.rate)) + kpi("미달 학과", st.under == null ? "-" : Math.round(st.under * 100) + "%") + "</div>" +
+            "<dl><dt>무엇을 배우나</dt><dd>" + esc(c.learn) + "</dd><dt>이런 학생에게 맞아요</dt><dd>" + esc(c.fit) + "</dd>" +
+            "<dt>고등학교 때 들으면 좋은 과목</dt><dd>" + esc(c.hs) + "</dd><dt>졸업 후 진로</dt><dd>" + esc(c.jobs) + "</dd>" +
+            (c.cert ? "<dt>관련 자격·시험</dt><dd>" + esc(c.cert) + "</dd>" : "") + "</dl>" +
+            (c.note ? '<p class="muted small">※ ' + esc(c.note) + "</p>" : "") +
+            '<div class="chips">' + c.majors.map(majorLink).join("") + "</div></article>";
+        }).join("") + "</div>" +
+        '<p class="source">수치: ' + SRC_UNIV + " (학과군 합계) · 고교 과목은 2022 개정 교육과정 과목명 기준의 일반적 안내이며, 대학별 ‘권장 이수 과목’은 각 대학 발표를 확인하세요. " +
+        '더 자세한 학과 설명: <a href="https://www.career.go.kr" target="_blank" rel="noopener">커리어넷</a></p></section>';
     });
   }
 
@@ -1254,11 +1292,11 @@
     if (!a) return;
     a.textContent = ME ? (ME.name || "내 계정") : "로그인";
     a.setAttribute("href", ME ? "#/account" : "#/login");
-    var g = $("#navGichul");
-    if (ME && ME.isAdmin && !g) {
-      g = document.createElement("a"); g.id = "navGichul"; g.href = "#/admin/gichul"; g.setAttribute("data-nav", "admin"); g.textContent = "기출 정리함";
+    var g = $("#navAdmin");
+    if (ME && ME.isStaff && !g) {
+      g = document.createElement("a"); g.id = "navAdmin"; g.href = "#/admin"; g.setAttribute("data-nav", "admin"); g.textContent = "관리";
       a.parentNode.insertBefore(g, a);
-    } else if (g && !(ME && ME.isAdmin)) g.remove();
+    } else if (g && !(ME && ME.isStaff)) g.remove();
   }
   function needLogin(next) {
     view.innerHTML = '<section class="section"><div class="card narrow"><h1>로그인이 필요합니다</h1><p class="muted">이 기능은 회원만 쓸 수 있습니다.</p>' +
@@ -1552,6 +1590,73 @@
       '<p class="muted small">이 방침은 초안입니다. 운영 전에 운영자·책임자 정보와 내용을 검토해 확정하세요.</p></div></section>';
   }
 
+  /* ---------- 관리 (관리자·운영자) ---------- */
+  function pageAdmin(sub) {
+    return refreshMe().then(function () {
+      if (!ME) return needLogin("admin");
+      if (!ME.isStaff) { view.innerHTML = '<section class="section"><h1>페이지를 찾을 수 없습니다</h1></section>'; return; }
+      if (sub === "gichul") return pageGichul();
+      var tab = sub || "stats";
+      view.innerHTML = '<section class="section"><div class="section-head"><h1>관리 <span class="tag tag-w">' + (ME.isAdmin ? "관리자" : "운영자") + "</span></h1>" +
+        "<p>회원 현황, 결과 제보, 기출 정리함을 관리합니다. 회원의 성적·학생부·상담 기록은 개인정보라 이 화면에서 볼 수 없습니다.</p></div>" +
+        '<div class="tabs" style="margin-bottom:14px">' +
+        [["stats", "현황"], ["users", "회원"], ["reports", "결과 제보"], ["gichul", "기출 정리함"]].map(function (t) {
+          return '<a class="tabs-a' + (t[0] === tab ? " is-active" : "") + '" href="#/admin/' + t[0] + '">' + t[1] + "</a>";
+        }).join("") + '</div><div id="adBody">불러오는 중…</div></section>';
+      var box = $("#adBody");
+      if (tab === "stats") return api("GET", "/admin/stats").then(function (x) {
+        var max = Math.max.apply(null, x.daily.map(function (d) { return d.n; }).concat([1]));
+        box.innerHTML = '<div class="kpis">' + kpi("회원", fmtInt(x.users) + "명") + kpi("학생", fmtInt(x.students)) + kpi("학부모", fmtInt(x.parents)) +
+          kpi("최근 7일 가입", fmtInt(x.new7)) + kpi("최근 30일 가입", fmtInt(x.new30)) + kpi("최근 7일 로그인", fmtInt(x.active7)) + "</div>" +
+          '<div class="kpis wide">' + kpi("성적 저장 회원", fmtInt(x.withData)) + kpi("학부모-자녀 연결", fmtInt(x.links)) + kpi("제보 동의 회원", fmtInt(x.reportConsent)) +
+          kpi("결과 제보", fmtInt(x.reports) + "건") + kpi("카카오", fmtInt(x.social.kakao || 0)) + kpi("네이버", fmtInt(x.social.naver || 0)) + kpi("기출 파일", fmtInt(x.gichulFiles)) + "</div>" +
+          '<div class="card" style="margin-top:16px"><h2>최근 30일 가입</h2>' + (x.daily.length ? '<div class="bars">' + x.daily.map(function (d) {
+            return '<div class="bar" title="' + esc(d.d) + " " + d.n + '명"><i style="height:' + Math.round(d.n / max * 100) + '%"></i><small>' + esc(d.d.slice(5)) + "</small></div>";
+          }).join("") + "</div>" : '<p class="muted">가입 없음</p>') + "</div>";
+      });
+      if (tab === "users") {
+        var load = function (q) {
+          return api("GET", "/admin/users?q=" + encodeURIComponent(q || "")).then(function (list) {
+            var date = function (t) { return t ? new Date(t * 1000).toLocaleDateString("ko-KR") : "-"; };
+            box.innerHTML = '<div class="card"><div class="toolbar"><label>이메일·이름 검색<input type="search" id="uQ" value="' + esc(q || "") + '" /></label></div>' +
+              '<div class="table-wrap"><table class="data-table"><thead><tr><th>이메일</th><th>이름</th><th>구분</th><th>로그인</th><th>가입</th><th>최근 로그인</th><th class="num">제보</th><th>권한</th><th></th></tr></thead><tbody>' +
+              list.map(function (u) {
+                var role = u.admin ? '<span class="tag tag-c">최초 관리자</span>' : ME.isAdmin && u.id !== ME.id ?
+                  '<select data-staff="' + u.id + '">' + [["", "일반"], ["operator", "운영자"], ["admin", "관리자"]].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === u.staff ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select>" :
+                  esc({ "": "일반", operator: "운영자", admin: "관리자" }[u.staff] || "일반");
+                return "<tr><td>" + esc(u.email || "(간편 로그인)") + "</td><td>" + esc(u.name) + "</td><td>" + (u.role === "parent" ? "학부모" : "학생") + (u.consent_at ? "" : ' <span class="tag">동의 전</span>') +
+                  "</td><td>" + esc((u.providers || "이메일").replace("kakao", "카카오").replace("naver", "네이버")) + "</td><td>" + date(u.created) + "</td><td>" + date(u.last_login) +
+                  '</td><td class="num">' + u.reports + "</td><td>" + role + "</td><td>" + (ME.isAdmin && u.id !== ME.id && !u.admin ? '<button class="icon-btn" data-udel="' + u.id + '" title="강제 탈퇴">×</button>' : "") + "</td></tr>";
+              }).join("") + '</tbody></table></div><p class="muted small">최대 500명 표시. 권한 변경·강제 탈퇴는 관리자만 할 수 있습니다. 최초 관리자는 서버 설정(ADMIN_EMAILS)으로 정합니다.</p></div>';
+            var t;
+            $("#uQ").addEventListener("input", function () { var v = this.value.trim(); clearTimeout(t); t = setTimeout(function () { load(v); }, 300); });
+            $all("[data-staff]").forEach(function (sel) {
+              sel.addEventListener("change", function () {
+                api("PUT", "/admin/users/" + sel.getAttribute("data-staff"), { staff: sel.value }).catch(function (e) { alert(e.message); load(q); });
+              });
+            });
+            $all("[data-udel]").forEach(function (b) {
+              b.addEventListener("click", function () {
+                if (!confirm("이 회원을 강제 탈퇴시킬까요? 회원의 모든 정보가 즉시 삭제됩니다.")) return;
+                api("DELETE", "/admin/users/" + b.getAttribute("data-udel")).then(function () { load(q); }).catch(function (e) { alert(e.message); });
+              });
+            });
+          });
+        };
+        return load("");
+      }
+      if (tab === "reports") return api("GET", "/admin/reports").then(function (list) {
+        var byRes = {}, byTrack = {};
+        list.forEach(function (r) { byRes[r.result] = (byRes[r.result] || 0) + 1; byTrack[r.track] = (byTrack[r.track] || 0) + 1; });
+        box.innerHTML = '<div class="kpis">' + kpi("제보", list.length + "건") + Object.keys(byRes).map(function (k) { return kpi(k, byRes[k]); }).join("") + "</div>" +
+          '<div class="card" style="margin-top:16px"><h2>최근 제보</h2><p class="muted small">통계 활용에 동의한 회원의 제보만, 누가 썼는지 빼고 보여 줍니다. 이 자료가 쌓이면 합격 예측 모델의 사례가 됩니다.</p>' +
+          '<div class="table-wrap"><table class="data-table"><thead><tr><th>학년도</th><th>전형</th><th>대학</th><th>학과</th><th>전형명</th><th>결과</th><th>성적 첨부</th></tr></thead><tbody>' +
+          list.map(function (r) { return "<tr><td>" + r.year + "</td><td>" + esc(r.track) + "</td><td>" + esc(r.univ_name) + "</td><td>" + esc(r.dept) + "</td><td>" + esc(r.jeonhyeong) + "</td><td><b>" + esc(r.result) + "</b></td><td>" + (r.has_score ? "있음" : "-") + "</td></tr>"; }).join("") +
+          "</tbody></table></div></div>";
+      });
+    });
+  }
+
   /* ---------- 관리자: 기출 정리함 (운영자 개인 참고용) ---------- */
   var G_SUBJ = ["언어와 매체", "화법과 작문", "문학", "독서", "국어", "확률과 통계", "미적분", "기하", "수학Ⅱ", "수학Ⅰ", "수학2", "수학1", "수학",
     "영어Ⅱ", "영어Ⅰ", "영어2", "영어1", "영어독해와 작문", "영어", "한국사", "통합사회", "통합과학", "물리학Ⅱ", "물리학Ⅰ", "물리", "화학Ⅱ", "화학Ⅰ", "화학",
@@ -1570,13 +1675,13 @@
   function pageGichul() {
     return refreshMe().then(function () {
       if (!ME) return needLogin("admin/gichul");
-      if (!ME.isAdmin) { view.innerHTML = '<section class="section"><h1>페이지를 찾을 수 없습니다</h1></section>'; return; }
+      if (!ME.isStaff) { view.innerHTML = '<section class="section"><h1>페이지를 찾을 수 없습니다</h1></section>'; return; }
       return Promise.all([api("GET", "/admin/gichul/schools"), api("GET", "/admin/gichul/files")]).then(function (r) {
         var schools = r[0], files = r[1];
         var st = { q: "", gu: "", status: "", type: "", open: null, tab: "schools" };
         var gus = uniq(schools.map(function (s) { return s.gu; })).sort();
         var types = uniq(schools.map(function (s) { return s.type; })).sort();
-        view.innerHTML = '<section class="section"><div class="section-head"><h1>기출 정리함 <span class="tag tag-w">관리자 전용</span></h1>' +
+        view.innerHTML = '<section class="section"><div class="section-head"><p class="crumb"><a href="#/admin">관리</a> ›</p><h1>기출 정리함 <span class="tag tag-w">운영진 전용</span></h1>' +
           "<p>서울 고등학교가 홈페이지에 공개한 평가 문항을 직접 내려받아 모아 두는 곳입니다. 파일은 웹에 공개되지 않는 서버 폴더에만 저장되며 운영자 개인 참고용입니다(사이트 게시·배포 금지).</p></div>" +
           '<div class="kpis" id="gSum"></div>' +
           '<div class="tabs" style="margin:14px 0"><button type="button" data-t="schools">학교 체크리스트</button><button type="button" data-t="files">모은 파일</button></div>' +
