@@ -53,6 +53,7 @@
       case "college": p = parts[1] ? pageCollegeDetail(parts[1]) : pageCollegeList(q); break;
       case "dept": p = pageDept(q); break;
       case "calc": p = pageCalc(); break;
+      case "chance": p = pageChance(q); break;
       case "login": p = pageLogin(q); break;
       case "signup": p = pageSignup(); break;
       case "account": p = pageAccount(); break;
@@ -143,6 +144,7 @@
       "</div></div></section>" +
 
       '<section class="section"><div class="grid-3">' +
+      card("#/chance", "4년제 기회 찾기", "등급이 낮아도 갈 수 있는 4년제: 최근 미달이 이어져 합격 가능성이 높은 대학·학과를 10년 공시 자료로 예측.") +
       card("#/univ", "4년제 대학", "대학별·학과별 10개년 모집인원, 지원자, 경쟁률, 충원율 추이와 대학 공식 입시결과·모집요강 원문.") +
       card("#/college", "전문대학", "전문대학 학과별 일반전형·일반고·특성화고 등 전형별 모집·지원·경쟁률.") +
       card("#/dept", "학과 찾기", "가고 싶은 학과를 개설한 전국 대학을 경쟁률·모집인원 순으로 비교.") +
@@ -467,6 +469,77 @@
       $("#pRegion").addEventListener("change", function () { st.region = this.value; render(); });
       $("#pField").addEventListener("change", function () { st.field = this.value; render(); });
       $("#pSort").addEventListener("change", function () { st.sort = this.value; render(); });
+      render();
+    });
+  }
+
+  /* ---------- 4년제 기회 찾기 (미달 예상 대학·학과) ---------- */
+  function pageChance(q) {
+    view.innerHTML = '<p class="section">불러오는 중…</p>';
+    return getJSON("data/risk.json").then(function (R) {
+      var regions = uniq(R.univ.map(function (u) { return u.region; })).sort();
+      var fields = uniq([].concat.apply([], R.univ.map(function (u) { return u.depts.map(function (d) { return d.field; }); }))).sort();
+      var st = { region: q.get("region") || "", field: "", level: "", hideRel: true, hideArt: false, q: "" };
+      var bt = R.backtest.methods;
+      var hiP = bt["LR(0.5)"] ? Math.round(bt["LR(0.5)"].precision * 100) : null;
+      var midP = bt["LR(최적)"] ? Math.round(bt["LR(최적)"].precision * 100) : null;
+      view.innerHTML =
+        '<section class="section"><div class="section-head"><h1>4년제 기회 찾기</h1>' +
+        "<p>등급이 낮아도 4년제 대학에 갈 길은 있습니다. 최근 몇 년간 <b>신입생을 정원만큼 다 뽑지 못한(미달) 대학·학과</b>를 교육부 공시 10개년 자료로 찾아, " +
+        R.predictYear + "학년도에도 미달이 예상되는 곳을 보여 줍니다. 이런 학과는 지원하면 합격 가능성이 높고, 수시·정시 뒤 <b>추가모집</b>(매년 2월 말)에서도 다시 기회가 있습니다.</p></div>" +
+        '<div class="grid-2">' +
+        '<div class="card"><h2>어떻게 골랐나요</h2><ul class="plain small">' +
+        "<li>학과별 최근 신입생 충원율·경쟁률·3년간 미달 횟수, 대학 전체 충원율, 모집 규모로 미달 확률을 계산합니다(로지스틱 회귀).</li>" +
+        "<li><b>정확도(과거 검증)</b>: " + R.backtest.years[0] + "~" + R.backtest.years[1] + "학년도를 각각 그 전 자료만으로 예측해 본 결과, " +
+        (hiP != null ? "‘가능성 높음’으로 고른 학과의 <b>" + hiP + "%</b>가 실제로 미달" : "") + (midP != null ? ", ‘가능성 있음’까지 넓히면 " + midP + "%가 실제로 미달" : "") + "이었습니다. 판별력(AUC) " + R.backtest.auc + ".</li>" +
+        "<li>합격선(성적 컷)을 보여 주는 화면이 아닙니다. 실제 전형·지원 자격은 대학 모집요강을 확인하세요.</li></ul></div>" +
+        '<div class="card"><h2>알고 선택하세요</h2><p class="small">이 목록은 대학을 걸러 내지 않습니다. 불이익이 있더라도 4년제 학위가 더 중요한 학생도 있으니, 아래를 미리 알고 선택하면 됩니다.</p><ul class="plain small">' +
+        "<li><b>학자금 지원 제한 여부</b>: 교육부가 매년 8~9월 발표하는 ‘학자금 지원 제한 대학’이면 그 해 국가장학금·학자금 대출이 막힐 수 있습니다. 제한은 해마다 다시 평가되며, 대학이 자체 장학금으로 보전해 주는 경우도 있으니 입학처에 확인하세요.</li>" +
+        "<li><b>대학의 재정·취업률·중도탈락률</b>: 대학알리미(academyinfo.go.kr) 공시에서 확인하세요. 신입생이 계속 줄면 학과 통폐합이나 폐교 위험도 있습니다.</li>" +
+        "<li><b>장학금</b>: 미달 대학은 신입생 장학금·기숙사 혜택이 큰 경우가 많습니다. 입학처에 직접 물어보세요.</li>" +
+        "<li><b>추가모집</b>: 대학어디가(adiga.kr) ‘추가모집’ 안내에서 매년 2월 대학별 모집 학과를 확인할 수 있습니다.</li></ul></div></div>" +
+        '<div class="card"><div class="toolbar">' +
+        '<label>지역<select id="cRegion"><option value="">전체</option>' + regions.map(function (r) { return "<option>" + esc(r) + "</option>"; }).join("") + "</select></label>" +
+        '<label>계열<select id="cField"><option value="">전체</option>' + fields.map(function (r) { return "<option>" + esc(r) + "</option>"; }).join("") + "</select></label>" +
+        '<label>가능성<select id="cLevel"><option value="">높음+있음</option><option value="높음">높음만</option></select></label>' +
+        '<label>학과·대학 검색<input type="search" id="cQ" placeholder="예: 간호, 경영" /></label>' +
+        '<label class="check"><input type="checkbox" id="cRel" checked /> 종교 지도자 양성 학과 숨기기</label>' +
+        '<label class="check"><input type="checkbox" id="cArt" /> 예체능(실기) 학과 숨기기</label></div>' +
+        '<p class="muted small" id="cCount"></p><div id="cList"></div>' +
+        sourceNote(SRC_UNIV + " · " + R.baseYear + "학년도까지 공시 · 분석 " + esc(R.built)) + "</div></section>";
+
+      function deptOk(d) {
+        if (st.hideRel && d.tags.indexOf("종교") >= 0) return false;
+        if (st.hideArt && d.tags.indexOf("예체능") >= 0) return false;
+        if (st.field && d.field !== st.field) return false;
+        if (st.level && d.level !== st.level) return false;
+        return true;
+      }
+      function render() {
+        var n = 0, nu = 0;
+        var html = R.univ.filter(function (u) { return !st.region || u.region === st.region; }).map(function (u) {
+          var ds = u.depts.filter(deptOk).filter(function (d) { return !st.q || (u.name + d.name).indexOf(st.q) >= 0; });
+          if (!ds.length) return "";
+          n += ds.length; nu++;
+          return '<div class="chance-univ"><div class="chance-head"><a href="#/univ/' + esc(u.code) + '"><b>' + esc(u.name) + "</b></a>" + (u.campus && u.campus !== "본교" ? ' <span class="tag">' + esc(u.campus) + "</span>" : "") +
+            ' <span class="muted small">' + esc(u.region) + " · 대학 전체 충원율 " + R.baseYear + "년 " + u.fill + "% (최근 5년 " + u.fillTrend.join("→") + ")</span></div>" +
+            '<div class="table-wrap"><table class="data-table compact"><thead><tr><th>학과</th><th>계열</th><th class="num">모집</th><th class="num">작년 경쟁률</th><th class="num">작년 충원율</th><th>합격 가능성</th></tr></thead><tbody>' +
+            ds.map(function (d) {
+              return "<tr><td>" + esc(d.name) + d.tags.map(function (t) { return ' <span class="tag">' + esc(t) + "</span>"; }).join("") + "</td><td>" + esc(d.field) +
+                '</td><td class="num">' + fmtInt(d.rec) + '</td><td class="num">' + fmtRate(d.rate) + '</td><td class="num">' + fmtPct(d.fill) + "</td><td>" +
+                (d.level === "높음" ? '<span class="tag tag-c">높음</span>' : '<span class="tag">있음</span>') + "</td></tr>";
+            }).join("") + "</tbody></table></div></div>";
+        }).join("");
+        $("#cCount").textContent = "대학 " + nu + "곳 · 학과 " + n + "개";
+        $("#cList").innerHTML = html || '<p class="empty">조건에 맞는 학과가 없습니다.</p>';
+      }
+      $("#cRegion").value = st.region;
+      $("#cRegion").addEventListener("change", function () { st.region = this.value; render(); });
+      $("#cField").addEventListener("change", function () { st.field = this.value; render(); });
+      $("#cLevel").addEventListener("change", function () { st.level = this.value; render(); });
+      $("#cQ").addEventListener("input", function () { st.q = this.value.trim(); render(); });
+      $("#cRel").addEventListener("change", function () { st.hideRel = this.checked; render(); });
+      $("#cArt").addEventListener("change", function () { st.hideArt = this.checked; render(); });
       render();
     });
   }

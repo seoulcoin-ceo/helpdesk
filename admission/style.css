@@ -253,3 +253,6 @@ tr.is-cur td { background: var(--primary-soft); }
 .kpi-big { font-size: 2rem; font-weight: 800; margin: 4px 0; }
 .fav-btn { margin-top: 8px; padding: 6px 12px; }
 .nav-account { font-weight: 700; }
+/* 4년제 기회 찾기 */
+.chance-univ { border-top: 1px solid var(--line); padding: 14px 0 6px; }
+.chance-head { margin-bottom: 6px; }
