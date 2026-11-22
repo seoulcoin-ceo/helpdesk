@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>입시나침반 | 전국 대학·학과 10년 경쟁률과 공식 입시결과</title>
+  <meta name="description" content="교육부 대학알리미 공시 기반 전국 4년제 대학 학과별 10개년 모집인원·지원자·경쟁률·충원율, 전문대학 전형별 경쟁률, 각 대학 공식 입시결과·모집요강 원문을 한곳에서." />
+  <meta property="og:title" content="입시나침반 | 전국 대학·학과 10년 입시 데이터" />
+  <meta property="og:description" content="교육부·대교협·전문대교협 공식 공시 데이터만 사용합니다." />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="ko_KR" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%231d3fbf'/%3E%3Cpath d='M16 6l4 10-4 10-4-10z' fill='%23fff'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css?v=4" />
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a class="brand" href="#/">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="14"/><path d="M16 6l4 10-4 10-4-10z"/></svg></span>
+        <span><strong>입시나침반</strong><small>공식 공시 데이터로 보는 대학 입시</small></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-label="메뉴 열기" aria-expanded="false"><span></span><span></span><span></span></button>
+      <nav class="site-nav" aria-label="주요 메뉴">
+        <a href="#/univ" data-nav="univ">4년제 대학</a>
+        <a href="#/college" data-nav="college">전문대학</a>
+        <a href="#/dept" data-nav="dept">학과 찾기</a>
+        <a href="#/calc" data-nav="calc">성적 계산기</a>
+        <a href="#/guide" data-nav="guide">입시 가이드</a>
+        <a href="#/data" data-nav="data">데이터 출처</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <div class="container loading" id="view"><p>데이터를 불러오는 중입니다…</p></div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <p><strong>입시나침반</strong></p>
+        <p class="muted">모든 수치는 교육부 대학알리미·한국전문대학교육협의회 공시 데이터와 각 대학이 발표한 공식 자료를 그대로 사용하며, 임의로 추정·가공한 합격선은 제공하지 않습니다.
+          최종 지원 전에는 반드시 해당 대학 입학처의 최신 모집요강을 확인하세요.</p>
+      </div>
+      <div class="muted small"><p><a href="/u/">전국 4년제 대학 경쟁률·입시결과 모음</a></p><div id="footerSources"></div></div>
+    </div>
+  </footer>
+
+  <script src="app.js?v=4"></script>
+</body>
+</html>
