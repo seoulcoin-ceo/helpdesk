@@ -54,6 +54,7 @@
       case "dept": p = pageDept(q); break;
       case "calc": p = pageCalc(); break;
       case "chance": p = pageChance(q); break;
+      case "major": p = pageMajor(parts[1]); break;
       case "login": p = pageLogin(q); break;
       case "signup": p = pageSignup(); break;
       case "account": p = pageAccount(); break;
@@ -147,7 +148,7 @@
       card("#/chance", "4년제 기회 찾기", "등급이 낮아도 갈 수 있는 4년제: 최근 미달이 이어져 합격 가능성이 높은 대학·학과를 10년 공시 자료로 예측.") +
       card("#/univ", "4년제 대학", "대학별·학과별 10개년 모집인원, 지원자, 경쟁률, 충원율 추이와 대학 공식 입시결과·모집요강 원문.") +
       card("#/college", "전문대학", "전문대학 학과별 일반전형·일반고·특성화고 등 전형별 모집·지원·경쟁률.") +
-      card("#/dept", "학과 찾기", "가고 싶은 학과를 개설한 전국 대학을 경쟁률·모집인원 순으로 비교.") +
+      card("#/dept", "학과 찾기·학과 정보", "가고 싶은 학과를 개설한 전국 대학을 경쟁률·모집인원 순으로 비교.") +
       card("#/calc", "내 성적", "내신·모의고사·수능 가채점/실채점·검정고시 성적 입력, 수능 최저 충족 확인, 시험별 등급 추이.") +
       card("#/guide", "입시 가이드", "수시·정시 구조, 공식 입시결과 읽는 법, 학년도별 체크포인트.") +
       card("#/data", "데이터 출처", "모든 수치의 원출처, 갱신일, 용어 정의를 투명하게 공개합니다.") +
@@ -426,7 +427,8 @@
   /* ---------- 학과 찾기 ---------- */
   function pageDept(q) {
     view.innerHTML = '<p class="section">학과 목록을 불러오는 중…</p>';
-    return (DEPTS ? Promise.resolve(DEPTS) : getJSON("data/depts.json")).then(function (list) {
+    return Promise.all([DEPTS ? Promise.resolve(DEPTS) : getJSON("data/depts.json"), majorsIndex().catch(function () { return null; })]).then(function (r) {
+      var list = r[0];
       DEPTS = list;
       var byCode = {};
       IDX.univ.forEach(function (u) { byCode[u.code] = u; });
@@ -439,9 +441,17 @@
         '<label>지역<select id="pRegion"><option value="">전체</option>' + regions.map(function (r) { return "<option>" + esc(r) + "</option>"; }).join("") + "</select></label>" +
         '<label>계열<select id="pField"><option value="">전체</option>' + fields.map(function (r) { return "<option>" + esc(r) + "</option>"; }).join("") + "</select></label>" +
         '<label>정렬<select id="pSort"><option value="rate">경쟁률 높은순</option><option value="recruit">모집인원 많은순</option><option value="name">대학명순</option></select></label></div>' +
-        '<p class="muted small" id="pCount"></p><div class="table-wrap"><table class="data-table"><thead><tr><th>학과</th><th>대학</th><th>지역</th><th>계열</th><th class="num">정원내 모집</th><th class="num">경쟁률</th></tr></thead><tbody id="pBody"></tbody></table></div>' +
+        '<div id="pMajors"></div><p class="muted small" id="pCount"></p><div class="table-wrap"><table class="data-table"><thead><tr><th>학과</th><th>대학</th><th>지역</th><th>계열</th><th class="num">정원내 모집</th><th class="num">경쟁률</th></tr></thead><tbody id="pBody"></tbody></table></div>' +
         sourceNote(SRC_UNIV) + "</section>";
+      function majorsBox() {
+        var box = $("#pMajors");
+        if (!MAJORS) { box.innerHTML = ""; return; }
+        var ms = st.q ? majorMatches(st.q) : MAJORS.majors.slice(0, 24);
+        box.innerHTML = ms.length ? '<div class="card"><h2>' + (st.q ? "학과 정보 보기" : "많이 뽑는 학과 둘러보기") + '</h2><p class="muted small">학과를 누르면 무엇을 배우는지, 전국 개설 대학, 10년 경쟁률·미달 추이를 볼 수 있습니다.</p><div class="chips">' +
+          ms.map(function (m) { return '<a class="chip" href="#/major/' + m.id + '">' + esc(m.name) + ' <small>' + m.nUniv + "개 대학</small></a>"; }).join("") + "</div></div>" : "";
+      }
       function render() {
+        majorsBox();
         if (!st.q && !st.field) {
           $("#pCount").textContent = "학과명을 입력하거나 계열을 선택하세요.";
           $("#pBody").innerHTML = "";
@@ -470,6 +480,75 @@
       $("#pField").addEventListener("change", function () { st.field = this.value; render(); });
       $("#pSort").addEventListener("change", function () { st.sort = this.value; render(); });
       render();
+    });
+  }
+
+  /* ---------- 학과 정보 ---------- */
+  var MAJORS = null;
+  function majorsIndex() {
+    return MAJORS ? Promise.resolve(MAJORS) : getJSON("data/majors/index.json").then(function (j) { MAJORS = j; return j; });
+  }
+  function majorMatches(q) {
+    if (!MAJORS || !q) return [];
+    return MAJORS.majors.filter(function (m) { return m.name.indexOf(q) >= 0 || m.key.indexOf(q) >= 0 || m.aliases.some(function (a) { return a.indexOf(q) >= 0; }); }).slice(0, 12);
+  }
+  // 커리어넷 학과정보: 응답 구조가 항목마다 조금씩 달라 아는 항목만 골라 보여 준다
+  function cnText(v) {
+    if (v == null) return "";
+    if (Array.isArray(v)) return v.map(cnText).filter(Boolean).join(", ");
+    if (typeof v === "object") return Object.keys(v).map(function (k) { return cnText(v[k]); }).filter(Boolean).join(" · ");
+    return String(v).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function cnSection(c) {
+    var x = (((c || {}).dataSearch || {}).content || [])[0];
+    if (!x) return "";
+    var parts = [["학과 개요", x.summary], ["이런 학생에게 맞아요(흥미)", x.interest], ["필요한 적성", x.property],
+      ["대학에서 배우는 주요 과목", x.main_subject], ["고등학교 때 들으면 좋은 과목", x.relate_subject], ["졸업 후 진출 분야", x.enter_field],
+      ["관련 직업", x.job], ["관련 자격증", x.qualifications], ["추천 활동", x.career_act]];
+    var html = parts.map(function (p) {
+      var t = cnText(p[1]);
+      return t ? "<h3>" + p[0] + "</h3><p>" + esc(t) + "</p>" : "";
+    }).join("");
+    return html ? '<div class="card major-info"><h2>학과 이해</h2>' + html + sourceNote("커리어넷 학과정보 (한국직업능력연구원)") + "</div>" : "";
+  }
+  function pageMajor(id) {
+    view.innerHTML = '<p class="section">불러오는 중…</p>';
+    return getJSON("data/majors/" + encodeURIComponent(id) + ".json").then(function (m) {
+      var s = m.series.filter(function (x) { return x.rec; });
+      var cnP = m.cn ? getJSON("data/majors/careernet/" + encodeURIComponent(m.cn) + ".json").catch(function () { return null; }) : Promise.resolve(null);
+      return majorsIndex().then(function (ix) {
+        var cn = (ix.majors.filter(function (x) { return x.id === m.id; })[0] || {}).cn;
+        return cn ? getJSON("data/majors/careernet/" + encodeURIComponent(cn) + ".json").catch(function () { return null; }) : cnP;
+      }).then(function (cn) {
+        var first = s[0], last = s[s.length - 1];
+        var change = first && last && first.rec ? Math.round((last.rec - first.rec) / first.rec * 100) : null;
+        view.innerHTML =
+          '<section class="section"><p class="crumb"><a href="#/dept?q=' + encodeURIComponent(m.key) + '">학과 찾기</a> ›</p>' +
+          '<div class="detail-head"><div><h1>' + esc(m.name) + '</h1><p class="muted">' + esc(m.field) + " · " + esc(m.mid) +
+          (m.aliases.length > 1 ? " · 같은 학과로 묶은 이름: " + esc(m.aliases.slice(0, 6).join(", ")) : "") + "</p></div>" +
+          '<div class="kpis">' + kpi("개설 대학", m.nUniv + "곳") + kpi(m.baseYear + " 전국 모집", fmtInt(m.rec) + "명") + kpi("전국 평균 경쟁률", fmtRate(m.rate)) +
+          kpi("미달 학과 비율", m.underShare == null ? "-" : Math.round(m.underShare * 100) + "%") + "</div></div>" +
+          (cnSection(cn) || '<div class="card"><h2>학과 이해</h2><p class="muted">이 학과에서 무엇을 배우고 졸업 후 어떤 일을 하는지에 대한 설명은 커리어넷 학과정보 연동 후 제공됩니다. ' +
+            '지금은 <a href="https://www.career.go.kr/cnet/front/base/major/FunivMajorList.do" target="_blank" rel="noopener">커리어넷 학과정보</a>에서 ‘' + esc(m.key) + "’을 검색해 보세요.</p></div>") +
+          '<div class="card"><h2>전국 추이 ' + (s.length ? s[0].y + "~" + last.y : "") + "</h2>" +
+          '<p class="muted small">같은 학과로 묶인 전국 4년제 학과의 합계입니다.' + (change != null ? " 10년 동안 모집인원 " + (change >= 0 ? "+" : "") + change + "%." : "") + "</p>" +
+          lineChart(s.map(function (x) { return { k: String(x.y), v: x.rate }; }), { label: m.name + " 전국 경쟁률", unit: ":1" }) +
+          '<div class="table-wrap"><table class="data-table compact"><thead><tr><th>학년도</th>' + s.map(function (x) { return '<th class="num">' + x.y + "</th>"; }).join("") + "</tr></thead><tbody>" +
+          "<tr><th>개설 학과</th>" + s.map(function (x) { return '<td class="num">' + x.n + "</td>"; }).join("") + "</tr>" +
+          "<tr><th>정원내 모집</th>" + s.map(function (x) { return '<td class="num">' + fmtInt(x.rec) + "</td>"; }).join("") + "</tr>" +
+          "<tr><th>경쟁률</th>" + s.map(function (x) { return '<td class="num"><b>' + (x.rate == null ? "-" : x.rate.toFixed(1)) + "</b></td>"; }).join("") + "</tr>" +
+          "<tr><th>충원율</th>" + s.map(function (x) { return '<td class="num">' + fmtPct(x.fill) + "</td>"; }).join("") + "</tr></tbody></table></div>" +
+          sourceNote(SRC_UNIV) + "</div>" +
+          '<div class="card"><h2>개설 대학 ' + m.univ.length + '곳</h2><p class="muted small">' + m.baseYear + "학년도 공시. 충원율이 100% 미만이면 그 해 신입생을 다 뽑지 못한(미달) 학과입니다. " +
+          '<a href="#/chance">4년제 기회 찾기</a>에서 미달 예상 학과만 모아 볼 수 있습니다.</p>' +
+          '<div class="table-wrap"><table class="data-table"><thead><tr><th>대학</th><th>학과명</th><th>지역</th><th class="num">모집</th><th class="num">경쟁률</th><th class="num">충원율</th></tr></thead><tbody>' +
+          m.univ.map(function (u) {
+            return '<tr class="link-row" data-href="#/univ/' + esc(u.code) + '"><td><a href="#/univ/' + esc(u.code) + '">' + esc(u.univ) + "</a></td><td>" + esc(u.dept) + (u.dn && u.dn !== "주간" ? ' <span class="tag">' + esc(u.dn) + "</span>" : "") +
+              "</td><td>" + esc(u.region) + '</td><td class="num">' + fmtInt(u.rec) + '</td><td class="num"><b>' + fmtRate(u.rate) + '</b></td><td class="num">' +
+              (u.fill != null && u.fill < 100 ? '<span class="tag tag-w">' + fmtPct(u.fill) + "</span>" : fmtPct(u.fill)) + "</td></tr>";
+          }).join("") + "</tbody></table></div>" + sourceNote(SRC_UNIV) + "</div></section>";
+        bindRows();
+      });
     });
   }
 

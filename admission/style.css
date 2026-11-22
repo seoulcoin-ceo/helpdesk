@@ -256,3 +256,10 @@ tr.is-cur td { background: var(--primary-soft); }
 /* 4년제 기회 찾기 */
 .chance-univ { border-top: 1px solid var(--line); padding: 14px 0 6px; }
 .chance-head { margin-bottom: 6px; }
+/* 학과 정보 */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 99px; background: var(--surface); text-decoration: none; color: var(--text); font-weight: 600; font-size: .9rem; }
+.chip:hover { border-color: var(--primary); color: var(--primary); }
+.chip small { color: var(--muted); font-weight: 500; }
+.major-info h3 { font-size: .95rem; margin: 14px 0 4px; color: var(--primary); }
+.major-info p { margin: 0; }
