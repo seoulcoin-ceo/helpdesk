@@ -224,3 +224,12 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 1
 .ipsi-cap a { white-space: nowrap; font-weight: 600; }
 .ipsi-table thead th { text-align: center; white-space: normal; vertical-align: middle; position: static; border: 1px solid var(--line); min-width: 52px; }
 .ipsi-table td { border-right: 1px solid var(--line); }
+/* 내 성적 */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 14px; }
+.tabs button { font: inherit; font-weight: 700; padding: 8px 16px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; }
+.tabs button.is-active { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.score-table input, .score-table select { width: 100%; min-width: 64px; }
+.score-table td.num input { max-width: 96px; text-align: right; }
+input.invalid { border-color: #c9343a !important; background: #fdeeee; }
+.check { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; font-weight: 600; }
+tr.is-cur td { background: var(--primary-soft); }

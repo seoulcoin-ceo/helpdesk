@@ -140,7 +140,7 @@
       card("#/univ", "4년제 대학", "대학별·학과별 10개년 모집인원, 지원자, 경쟁률, 충원율 추이와 대학 공식 입시결과·모집요강 원문.") +
       card("#/college", "전문대학", "전문대학 학과별 일반전형·일반고·특성화고 등 전형별 모집·지원·경쟁률.") +
       card("#/dept", "학과 찾기", "가고 싶은 학과를 개설한 전국 대학을 경쟁률·모집인원 순으로 비교.") +
-      card("#/calc", "성적 계산기", "내신 평균등급(9등급·5등급제)과 영어·한국사 절대평가 등급 자동 계산.") +
+      card("#/calc", "내 성적", "내신·모의고사·수능 가채점/실채점·검정고시 성적 입력, 수능 최저 충족 확인, 시험별 등급 추이.") +
       card("#/guide", "입시 가이드", "수시·정시 구조, 공식 입시결과 읽는 법, 학년도별 체크포인트.") +
       card("#/data", "데이터 출처", "모든 수치의 원출처, 갱신일, 용어 정의를 투명하게 공개합니다.") +
       "</div></section>" +
@@ -464,77 +464,341 @@
     });
   }
 
-  /* ---------- 성적 계산기 ---------- */
+  /* ---------- 내 성적 (내신·모의고사·수능·검정고시) ---------- */
   var GROUPS = ["국어", "수학", "영어", "사회", "과학", "한국사", "기타"];
   var SEMS = ["1-1", "1-2", "2-1", "2-2", "3-1", "3-2"];
+  var EXAM_KINDS = [
+    "교육청 학력평가 3월", "교육청 학력평가 4월", "평가원 모의평가 6월", "교육청 학력평가 7월",
+    "평가원 모의평가 9월", "교육청 학력평가 10월", "교육청 학력평가 11월(고1·2)", "수능 가채점", "수능 성적표(실채점)"
+  ];
+  var KOR_SEL = ["", "화법과 작문", "언어와 매체"];
+  var MATH_SEL = ["", "확률과 통계", "미적분", "기하"];
+  var TAM_SUBJ = ["", "생활과 윤리", "윤리와 사상", "한국지리", "세계지리", "동아시아사", "세계사", "경제", "정치와 법", "사회·문화",
+    "물리학Ⅰ", "화학Ⅰ", "생명과학Ⅰ", "지구과학Ⅰ", "물리학Ⅱ", "화학Ⅱ", "생명과학Ⅱ", "지구과학Ⅱ", "직업탐구"];
+  // 영역: 키, 이름, 원점수 최대, 표준점수 최대(없으면 절대평가), 선택과목 목록
+  var AREAS = [
+    { k: "kor", n: "국어", raw: 100, std: 200, sel: KOR_SEL },
+    { k: "math", n: "수학", raw: 100, std: 200, sel: MATH_SEL },
+    { k: "eng", n: "영어", raw: 100, abs: "eng" },
+    { k: "his", n: "한국사", raw: 50, abs: "his" },
+    { k: "t1", n: "탐구1", raw: 50, std: 100, sel: TAM_SUBJ },
+    { k: "t2", n: "탐구2", raw: 50, std: 100, sel: TAM_SUBJ }
+  ];
+  var GED_SUBJ = ["국어", "수학", "영어", "사회", "과학", "한국사"];
+  var GED_OPT = ["도덕", "기술·가정", "체육", "음악", "미술"];
+
+  function absGrade(kind, raw) {
+    var v = num(raw);
+    if (kind === "eng") return v == null || v < 0 || v > 100 ? null : Math.min(9, 10 - Math.floor(Math.min(v, 99) / 10));
+    return v == null || v < 0 || v > 50 ? null : (v >= 40 ? 1 : Math.min(9, 1 + Math.ceil((40 - v) / 5)));
+  }
+  function gradeOf(rec, k) {
+    var a = rec.s && rec.s[k] || {};
+    var g = num(a.grade);
+    if (g >= 1 && g <= 9) return Math.round(g);
+    var area = AREAS.filter(function (x) { return x.k === k; })[0];
+    if (area && area.abs) return absGrade(area.abs, a.raw);
+    return null;
+  }
+  // 수능 최저: 대상 영역에서 필수 영역을 넣고 나머지는 좋은 등급부터 채워 합산
+  function minCheck(rec, r) {
+    var t1 = gradeOf(rec, "t1"), t2 = gradeOf(rec, "t2"), tam = null;
+    if (r.tam === "top1") tam = [t1, t2].filter(function (x) { return x != null; }).sort()[0];
+    else if (t1 != null && t2 != null) { tam = (t1 + t2) / 2; if (r.tam === "avg2f") tam = Math.floor(tam); else if (r.tam === "avg2c") tam = Math.ceil(tam); }
+    var g = { kor: gradeOf(rec, "kor"), math: gradeOf(rec, "math"), eng: gradeOf(rec, "eng"), tam: tam };
+    var use = ["kor", "math", "eng", "tam"].filter(function (k) { return r.use[k]; });
+    var need = Math.min(+r.count || 0, use.length);
+    var must = use.filter(function (k) { return r.must[k]; });
+    if (!need) return { ok: null, msg: "반영 영역 수를 정하세요" };
+    if (must.length > need) return { ok: null, msg: "필수 영역이 반영 영역 수보다 많습니다" };
+    var missing = use.filter(function (k) { return g[k] == null; });
+    if (must.some(function (k) { return g[k] == null; })) return { ok: null, msg: "필수 영역 등급이 없습니다" };
+    var rest = use.filter(function (k) { return must.indexOf(k) < 0 && g[k] != null; }).sort(function (a, b) { return g[a] - g[b]; });
+    var pick = must.concat(rest).slice(0, need);
+    if (pick.length < need) return { ok: null, msg: "입력된 등급이 부족합니다 (" + missing.map(areaName).join("·") + ")" };
+    var sum = pick.reduce(function (s, k) { return s + g[k]; }, 0);
+    var ok = sum <= +r.max;
+    var his = gradeOf(rec, "his");
+    var hisMsg = "";
+    if (num(r.his)) { if (his == null) return { ok: null, msg: "한국사 등급이 없습니다" }; if (his > +r.his) { ok = false; hisMsg = " · 한국사 " + his + "등급(기준 " + r.his + " 이내) 미충족"; } }
+    return { ok: ok, msg: pick.map(function (k) { return areaName(k) + " " + fmtG(g[k]); }).join(" + ") + " = " + fmtG(sum) + " (기준 " + r.max + " 이내)" + hisMsg };
+  }
+  function areaName(k) { return { kor: "국어", math: "수학", eng: "영어", tam: "탐구" }[k]; }
+  function fmtG(v) { return v == null ? "-" : (Math.round(v * 100) / 100).toString(); }
+  function newId() { return "e" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
   function pageCalc() {
     var s = load();
     s.gpa = s.gpa || { system: "9", rows: [] };
+    s.who = s.who || "재학생";
+    s.exams = s.exams || [];
+    s.ged = s.ged || { opt: "도덕", sc: {} };
+    s.rule = s.rule || { count: 2, max: 5, tam: "top1", his: "", use: { kor: true, math: true, eng: true, tam: true }, must: {} };
+    s.tab = s.tab || (s.who === "검정고시" ? "ged" : "exam");
+    if (!s.cur || !s.exams.some(function (e) { return e.id === s.cur; })) s.cur = s.exams.length ? s.exams[s.exams.length - 1].id : null;
+
+    var WHO_NOTE = {
+      "재학생": "수시는 보통 3학년 1학기까지의 학생부(내신)로, 정시는 수능 점수로 선발합니다. 내신과 모의고사·수능을 모두 입력해 두세요.",
+      "졸업생": "졸업생(N수생)은 정시는 재학생과 똑같이 수능 점수로 지원합니다. 수시는 3학년 2학기까지 내신이 반영될 수 있고, 일부 교과·학교장추천 전형은 졸업연도 제한(예: 재학생·직전 졸업생만)이 있으니 모집요강 ‘지원자격’을 꼭 확인하세요.",
+      "검정고시": "정시는 재학생과 똑같이 수능 점수로 지원합니다(모의고사·수능 탭 사용). 수시는 대학마다 지원 가능 여부와 검정고시 성적을 내신으로 바꾸는 방식(‘비교내신’)이 달라, 같은 점수라도 대학별 환산 등급이 다릅니다. 학교장추천 전형은 대부분 지원할 수 없습니다. 모집요강의 ‘지원자격’과 ‘검정고시 출신자 성적 산출’ 항목을 확인하세요."
+    };
+
     view.innerHTML =
-      '<section class="section"><div class="section-head"><h1>성적 계산기</h1><p>입력한 성적은 이 기기의 브라우저에만 저장되며 서버로 전송되지 않습니다.</p></div>' +
-      '<div class="card"><h2>내신 평균등급</h2><p class="muted small">평균등급 = Σ(등급 × 단위수) ÷ Σ단위수. 진로선택(성취도 A·B·C) 과목은 대학마다 반영 방식이 달라 제외하고 입력하세요. ' +
-      "실제 대학별 환산점수는 반영 교과·학년별 비율·가산점이 달라 이 평균과 다를 수 있습니다.</p>" +
-      '<div class="toolbar"><label>등급 체계<select id="gSys"><option value="9">9등급제 (2025학년도 고1 이전 입학)</option><option value="5">5등급제 (2025년 고1 입학부터)</option></select></label>' +
-      '<div class="toolbar-actions"><button class="btn btn-ghost" type="button" id="gAdd">+ 과목 추가</button><button class="btn btn-ghost danger" type="button" id="gClear">전체 삭제</button></div></div>' +
-      '<div class="table-wrap"><table class="data-table gpa-table"><thead><tr><th>학기</th><th>교과</th><th>과목명</th><th>단위수(학점)</th><th>석차등급</th><th></th></tr></thead><tbody id="gRows"></tbody></table></div>' +
-      '<div class="kpis wide" id="gStats"></div></div>' +
+      '<section class="section"><div class="section-head"><h1>내 성적</h1><p>내신, 모의고사, 수능 가채점·실채점, 검정고시 성적을 입력하고 수능 최저 충족 여부를 확인합니다. ' +
+      "<b>입력한 성적은 이 기기의 브라우저에만 저장되며 서버로 전송되지 않습니다.</b></p></div>" +
+      '<div class="card"><div class="toolbar"><label>나는<select id="who"><option>재학생</option><option>졸업생</option><option>검정고시</option></select></label>' +
+      '<p class="muted small" id="whoNote" style="flex:3 1 320px;margin:0"></p></div>' +
+      '<div class="tabs" role="tablist"><button type="button" data-tab="exam">모의고사·수능</button><button type="button" data-tab="gpa">학생부 내신</button><button type="button" data-tab="ged">검정고시</button></div></div>' +
+      '<div id="tabBody"></div>' +
+      '<div class="callout"><b>합격 가능성 예측은 제공하지 않습니다.</b> 이 화면은 입력한 성적을 정리하고, 정해진 규칙(등급 합, 절대평가 기준)만 계산합니다. ' +
+      "대학별 합격선은 각 대학이 발표한 공식 입시결과 원문(대학 상세 페이지)에서, 수능 최저 기준과 반영 방법은 해당 학년도 모집요강에서 확인하세요.</div></section>";
 
-      '<div class="card"><h2>영어·한국사 절대평가 등급</h2><p class="muted small">수능·평가원 모의평가 기준: 영어 90점 이상 1등급(10점 단위), 한국사 40점 이상 1등급(5점 단위).</p>' +
-      '<div class="toolbar"><label>영어 원점수 (0~100)<input type="number" id="eRaw" min="0" max="100" inputmode="numeric" /></label><div class="kpi"><span>영어 등급</span><strong id="eOut">-</strong></div>' +
-      '<label>한국사 원점수 (0~50)<input type="number" id="hRaw" min="0" max="50" inputmode="numeric" /></label><div class="kpi"><span>한국사 등급</span><strong id="hOut">-</strong></div></div></div>' +
-      '<div class="callout"><b>합격 가능성 예측은 제공하지 않습니다.</b> 대학별 합격선은 각 대학이 발표한 공식 입시결과 원문(대학 상세 페이지 하단)에서 확인하세요. ' +
-      "근거 없는 추정 합격선은 오히려 판단을 흐린다고 보기 때문입니다.</div></section>";
+    $("#who").value = s.who;
+    $("#who").addEventListener("change", function () { s.who = this.value; if (s.who === "검정고시") s.tab = "ged"; save(s); head(); renderTab(); });
+    $all(".tabs button").forEach(function (b) { b.addEventListener("click", function () { s.tab = b.getAttribute("data-tab"); save(s); head(); renderTab(); }); });
+    function head() {
+      $("#whoNote").textContent = WHO_NOTE[s.who];
+      $all(".tabs button").forEach(function (b) {
+        var on = b.getAttribute("data-tab") === s.tab;
+        b.classList.toggle("is-active", on); b.setAttribute("aria-selected", String(on));
+      });
+    }
+    function renderTab() {
+      if (s.tab === "gpa") tabGpa(); else if (s.tab === "ged") tabGed(); else tabExam();
+    }
 
-    function rowHtml(r, i) {
-      var max = s.gpa.system === "5" ? 5 : 9;
-      return '<tr data-i="' + i + '"><td><select data-k="sem">' + SEMS.map(function (x) { return "<option" + (x === r.sem ? " selected" : "") + ">" + x + "</option>"; }).join("") + "</select></td>" +
-        '<td><select data-k="group">' + GROUPS.map(function (x) { return "<option" + (x === r.group ? " selected" : "") + ">" + x + "</option>"; }).join("") + "</select></td>" +
-        '<td><input data-k="name" value="' + esc(r.name) + '" placeholder="과목명" /></td>' +
-        '<td><input data-k="unit" type="number" min="1" max="10" inputmode="numeric" value="' + esc(r.unit) + '" /></td>' +
-        '<td><input data-k="grade" type="number" min="1" max="' + max + '" inputmode="numeric" value="' + esc(r.grade) + '" /></td>' +
-        '<td><button type="button" class="icon-btn" data-del aria-label="삭제">×</button></td></tr>';
+    /* --- 모의고사·수능 --- */
+    function tabExam() {
+      var rec = s.exams.filter(function (e) { return e.id === s.cur; })[0];
+      $("#tabBody").innerHTML =
+        '<div class="card"><h2>모의고사·수능 성적</h2>' +
+        '<div class="toolbar"><label>저장된 성적<select id="eSel">' +
+        (s.exams.length ? s.exams.map(function (e) { return '<option value="' + e.id + '"' + (e.id === s.cur ? " selected" : "") + ">" + esc(examLabel(e)) + "</option>"; }).join("") : "<option value=\"\">(없음)</option>") +
+        '</select></label><div class="toolbar-actions"><button class="btn btn-primary" type="button" id="eNew">+ 새 시험 성적</button>' +
+        (rec ? '<button class="btn btn-ghost danger" type="button" id="eDel">이 성적 삭제</button>' : "") + "</div></div>" +
+        (rec ? examForm(rec) : '<p class="empty">‘+ 새 시험 성적’을 눌러 모의고사·가채점·수능 성적을 입력하세요.</p>') + "</div>" +
+        (rec ? minCard(rec) : "") + (s.exams.length > 1 ? trendCard() : "");
+
+      $("#eSel").addEventListener("change", function () { s.cur = this.value; save(s); tabExam(); });
+      $("#eNew").addEventListener("click", function () {
+        var y = new Date().getFullYear() + (new Date().getMonth() >= 11 ? 2 : 1);
+        var e = { id: newId(), kind: "교육청 학력평가 3월", year: String(y), grade: "고3", s: {} };
+        s.exams.push(e); s.cur = e.id; save(s); tabExam();
+      });
+      if (!rec) return;
+      $("#eDel").addEventListener("click", function () {
+        if (!confirm(examLabel(rec) + " 성적을 삭제할까요?")) return;
+        s.exams = s.exams.filter(function (e) { return e.id !== rec.id; }); s.cur = null; save(s); pageCalc();
+      });
+      $("#eMeta").addEventListener("input", function (e) {
+        var k = e.target.getAttribute("data-m"); if (!k) return;
+        rec[k] = e.target.value; save(s);
+        var o = $("#eSel option[value='" + rec.id + "']"); if (o) o.textContent = examLabel(rec);
+        $("#eHint").innerHTML = examHint(rec);
+      });
+      $("#eRows").addEventListener("input", function (e) {
+        var tr = e.target.closest("tr"), k = e.target.getAttribute("data-k");
+        if (!tr || !k) return;
+        var a = tr.getAttribute("data-a");
+        rec.s[a] = rec.s[a] || {}; rec.s[a][k] = e.target.value; save(s);
+        var area = AREAS.filter(function (x) { return x.k === a; })[0];
+        if (area.abs) { var g = absGrade(area.abs, rec.s[a].raw); $(".auto", tr).textContent = g ? "→ " + g + "등급" : ""; }
+        validate(e.target, area, k);
+        updMin(rec); updSum(rec);
+      });
+      bindRule(rec);
+      updSum(rec);
     }
-    function avg(rows) {
-      var sum = 0, u = 0, max = s.gpa.system === "5" ? 5 : 9;
-      rows.forEach(function (r) { var g = num(r.grade), w = num(r.unit); if (g >= 1 && g <= max && w > 0) { sum += g * w; u += w; } });
-      return u ? { v: sum / u, u: u } : null;
+    function examLabel(e) { return (e.year ? e.year + "학년도 " : "") + e.kind + (e.grade && e.grade !== "고3" ? " (" + e.grade + ")" : ""); }
+    function examHint(e) {
+      if (e.kind === "수능 가채점") return "가채점은 <b>원점수</b>만 정확합니다. 국어·수학·탐구의 등급·표준점수·백분위는 성적표가 나오기 전까지 입시기관 추정 등급컷에 따른 <b>예상값</b>이므로, 입력하더라도 실제와 다를 수 있습니다. 영어·한국사 등급은 절대평가라 원점수로 정확히 계산됩니다.";
+      if (e.kind === "수능 성적표(실채점)") return "수능 성적표에는 원점수가 나오지 않습니다. 성적표의 <b>표준점수·백분위·등급</b>을 그대로 입력하세요(영어·한국사는 등급만).";
+      return "성적표의 원점수·표준점수·백분위·등급을 그대로 입력하세요. 모르는 칸은 비워 두면 됩니다. 영어·한국사는 원점수만 넣으면 등급이 자동 계산됩니다.";
     }
-    function stats() {
-      var rows = s.gpa.rows;
-      var pick = function (gs) { return rows.filter(function (r) { return gs.indexOf(r.group) >= 0; }); };
-      var items = [["전과목", avg(rows)], ["국영수사과", avg(pick(["국어", "수학", "영어", "사회", "과학"]))], ["국영수과", avg(pick(["국어", "수학", "영어", "과학"]))], ["국영수사", avg(pick(["국어", "수학", "영어", "사회"]))]];
-      SEMS.forEach(function (sm) { var a = avg(rows.filter(function (r) { return r.sem === sm; })); if (a) items.push([sm + "학기", a]); });
-      $("#gStats").innerHTML = items.map(function (it) {
-        return '<div class="kpi"><span>' + it[0] + "</span><strong>" + (it[1] ? it[1].v.toFixed(2) : "-") + "</strong><small>" + (it[1] ? it[1].u + "단위" : "") + "</small></div>";
-      }).join("");
+    function examForm(e) {
+      return '<div class="toolbar" id="eMeta">' +
+        '<label>시험<select data-m="kind">' + EXAM_KINDS.map(function (k) { return "<option" + (k === e.kind ? " selected" : "") + ">" + k + "</option>"; }).join("") + "</select></label>" +
+        '<label>대상 학년도(수능 기준)<input data-m="year" type="number" min="2020" max="2035" inputmode="numeric" value="' + esc(e.year) + '" /></label>' +
+        '<label>응시 학년<select data-m="grade">' + ["고1", "고2", "고3", "졸업생"].map(function (k) { return "<option" + (k === e.grade ? " selected" : "") + ">" + k + "</option>"; }).join("") + "</select></label>" +
+        '<label>메모<input data-m="memo" value="' + esc(e.memo || "") + '" placeholder="예: 국어 시간 부족" /></label></div>' +
+        '<p class="muted small" id="eHint">' + examHint(e) + "</p>" +
+        '<div class="table-wrap"><table class="data-table score-table"><thead><tr><th>영역</th><th>선택과목</th><th class="num">원점수</th><th class="num">표준점수</th><th class="num">백분위</th><th class="num">등급</th></tr></thead><tbody id="eRows">' +
+        AREAS.map(function (a) {
+          var v = e.s[a.k] || {};
+          var sel = a.sel ? '<select data-k="sub">' + a.sel.map(function (x) { return '<option value="' + esc(x) + '"' + (x === (v.sub || "") ? " selected" : "") + ">" + (x || "선택") + "</option>"; }).join("") + "</select>" : '<span class="muted small">절대평가</span>';
+          var inp = function (k, max, ph) { return '<input data-k="' + k + '" type="number" min="0" max="' + max + '" step="any" inputmode="decimal" value="' + esc(v[k] == null ? "" : v[k]) + '" placeholder="' + (ph || "") + '" />'; };
+          var g = a.abs ? absGrade(a.abs, v.raw) : null;
+          return '<tr data-a="' + a.k + '"><th>' + a.n + "</th><td>" + sel + "</td>" +
+            '<td class="num">' + inp("raw", a.raw, "0~" + a.raw) + "</td>" +
+            '<td class="num">' + (a.std ? inp("std", a.std) : '<span class="muted">-</span>') + "</td>" +
+            '<td class="num">' + (a.std ? inp("pct", 100, "0~100") : '<span class="muted">-</span>') + "</td>" +
+            '<td class="num">' + inp("grade", 9, "1~9") + (a.abs ? ' <small class="auto muted">' + (g ? "→ " + g + "등급" : "") + "</small>" : "") + "</td></tr>";
+        }).join("") + "</tbody></table></div>" +
+        '<div class="kpis wide" id="eSum"></div>';
     }
-    function render() {
-      $("#gSys").value = s.gpa.system;
-      $("#gRows").innerHTML = s.gpa.rows.map(rowHtml).join("") || '<tr><td colspan="6" class="empty">‘+ 과목 추가’로 과목을 입력하세요.</td></tr>';
-      stats();
+    function validate(el, area, k) {
+      var v = num(el.value), max = k === "raw" ? area.raw : k === "std" ? area.std : k === "pct" ? 100 : 9, min = k === "grade" ? 1 : 0;
+      var bad = el.value !== "" && (v == null || v < min || v > max || (k === "grade" && v !== Math.round(v)));
+      el.classList.toggle("invalid", bad);
+      el.title = bad ? min + "~" + max + " 범위로 입력하세요" : "";
     }
-    $("#gRows").addEventListener("input", function (e) {
-      var tr = e.target.closest("tr"), k = e.target.getAttribute("data-k");
-      if (!tr || !k) return;
-      s.gpa.rows[+tr.getAttribute("data-i")][k] = e.target.value; save(s); stats();
-    });
-    $("#gRows").addEventListener("click", function (e) {
-      if (!e.target.hasAttribute("data-del")) return;
-      s.gpa.rows.splice(+e.target.closest("tr").getAttribute("data-i"), 1); save(s); render();
-    });
-    $("#gAdd").addEventListener("click", function () {
-      var last = s.gpa.rows[s.gpa.rows.length - 1];
-      s.gpa.rows.push({ sem: last ? last.sem : "1-1", group: "국어", name: "", unit: 4, grade: "" }); save(s); render();
-    });
-    $("#gClear").addEventListener("click", function () { if (confirm("입력한 과목을 모두 삭제할까요?")) { s.gpa.rows = []; save(s); render(); } });
-    $("#gSys").addEventListener("change", function () { s.gpa.system = this.value; save(s); render(); });
-    $("#eRaw").addEventListener("input", function () {
-      var v = num(this.value); $("#eOut").textContent = v == null || v < 0 || v > 100 ? "-" : Math.min(9, 10 - Math.floor(Math.min(v, 99) / 10)) + "등급";
-    });
-    $("#hRaw").addEventListener("input", function () {
-      var v = num(this.value); $("#hOut").textContent = v == null || v < 0 || v > 50 ? "-" : (v >= 40 ? 1 : Math.min(9, 1 + Math.ceil((40 - v) / 5))) + "등급";
-    });
-    render();
+    function updSum(rec) {
+      var g = function (k) { return gradeOf(rec, k); };
+      var pick = function (k, f) { var v = num(rec.s[k] && rec.s[k][f]); return v; };
+      var items = [["국어", g("kor")], ["수학", g("math")], ["영어", g("eng")], ["탐구1", g("t1")], ["탐구2", g("t2")], ["한국사", g("his")]]
+        .map(function (x) { return '<div class="kpi"><span>' + x[0] + "</span><strong>" + (x[1] ? x[1] + "등급" : "-") + "</strong></div>"; });
+      var pk = pick("kor", "pct"), pm = pick("math", "pct"), p1 = pick("t1", "pct"), p2 = pick("t2", "pct");
+      if (pk != null && pm != null && p1 != null && p2 != null)
+        items.push('<div class="kpi"><span>백분위 합 (국+수+탐2과목)</span><strong>' + fmtG(pk + pm + p1 + p2) + "</strong><small>참고용 단순 합</small></div>");
+      var sk = pick("kor", "std"), sm = pick("math", "std"), s1 = pick("t1", "std"), s2 = pick("t2", "std");
+      if (sk != null && sm != null && s1 != null && s2 != null)
+        items.push('<div class="kpi"><span>표준점수 합 (국+수+탐2과목)</span><strong>' + fmtG(sk + sm + s1 + s2) + "</strong><small>참고용 단순 합</small></div>");
+      $("#eSum").innerHTML = items.join("") +
+        '<p class="muted small" style="flex-basis:100%;margin:4px 0 0">합계는 단순 합입니다. 대학별 정시 환산점수는 영역별 반영 비율·탐구 변환표준점수·가산점이 달라 이 값과 다릅니다.</p>';
+    }
+
+    /* --- 수능 최저 확인 --- */
+    function minCard(rec) {
+      var r = s.rule;
+      var chk = function (grp, k, label) { return '<label class="check"><input type="checkbox" data-r="' + grp + '" data-k="' + k + '"' + (r[grp][k] ? " checked" : "") + " /> " + label + "</label>"; };
+      return '<div class="card"><h2>수능 최저학력기준 충족 확인</h2>' +
+        '<p class="muted small">모집요강의 기준을 그대로 옮겨 넣으세요. 예) “국어, 수학, 영어, 탐구(1과목) 중 2개 영역 등급 합 5 이내, 한국사 4등급 이내” → 반영 영역 4개 모두 체크, 2개 합 5, 탐구 상위 1과목, 한국사 4.</p>' +
+        '<div class="toolbar" id="ruleBox">' +
+        '<div><span class="muted small">반영 영역</span><div>' + chk("use", "kor", "국어") + chk("use", "math", "수학") + chk("use", "eng", "영어") + chk("use", "tam", "탐구") + "</div></div>" +
+        '<div><span class="muted small">반드시 포함할 영역</span><div>' + chk("must", "kor", "국어") + chk("must", "math", "수학") + chk("must", "eng", "영어") + chk("must", "tam", "탐구") + "</div></div>" +
+        '<label>몇 개 영역<select data-r="count">' + [1, 2, 3, 4].map(function (n) { return "<option" + (n === +r.count ? " selected" : "") + ">" + n + "</option>"; }).join("") + "</select></label>" +
+        '<label>등급 합 (이내)<input data-r="max" type="number" min="1" max="36" inputmode="numeric" value="' + esc(r.max) + '" /></label>' +
+        '<label>탐구 반영<select data-r="tam">' +
+        [["top1", "상위 1과목"], ["avg2", "2과목 평균(소수점 그대로)"], ["avg2f", "2과목 평균(소수점 버림)"], ["avg2c", "2과목 평균(소수점 올림)"]].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === r.tam ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></label>" +
+        '<label>한국사 (이내, 없으면 비움)<input data-r="his" type="number" min="1" max="9" inputmode="numeric" value="' + esc(r.his) + '" /></label></div>' +
+        '<div id="minOut"></div>' +
+        '<p class="muted small">대학에 따라 수학 선택과목(미적분·기하) 지정, 과학탐구 지정, 제2외국어/한문의 탐구 대체 등 추가 조건이 있습니다. 이런 조건은 여기서 계산하지 않으니 모집요강에서 직접 확인하세요.</p></div>';
+    }
+    function bindRule(rec) {
+      var box = $("#ruleBox");
+      var h = function (e) {
+        var g = e.target.getAttribute("data-r"); if (!g) return;
+        if (g === "use" || g === "must") s.rule[g][e.target.getAttribute("data-k")] = e.target.checked;
+        else s.rule[g] = e.target.value;
+        save(s); updMin(rec);
+      };
+      box.addEventListener("input", h); box.addEventListener("change", h);
+      updMin(rec);
+    }
+    function updMin(rec) {
+      var out = $("#minOut"); if (!out) return;
+      var rows = s.exams.map(function (e) { return [e, minCheck(e, s.rule)]; });
+      out.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>시험</th><th>결과</th><th>계산</th></tr></thead><tbody>' +
+        rows.map(function (x) {
+          var res = x[1], badge = res.ok === true ? '<span class="tag tag-c">충족</span>' : res.ok === false ? '<span class="tag tag-w">미충족</span>' : '<span class="tag">확인 불가</span>';
+          return "<tr" + (x[0].id === rec.id ? ' class="is-cur"' : "") + "><td>" + esc(examLabel(x[0])) + "</td><td>" + badge + "</td><td class=\"small\">" + esc(res.msg) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    function trendCard() {
+      var cols = [["kor", "국어"], ["math", "수학"], ["eng", "영어"], ["t1", "탐구1"], ["t2", "탐구2"], ["his", "한국사"]];
+      return '<div class="card"><h2>시험별 등급 추이</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>시험</th>' +
+        cols.map(function (c) { return '<th class="num">' + c[1] + "</th>"; }).join("") + "</tr></thead><tbody>" +
+        s.exams.map(function (e) {
+          return "<tr><td>" + esc(examLabel(e)) + "</td>" + cols.map(function (c) { var g = gradeOf(e, c[0]); return '<td class="num">' + (g || "-") + "</td>"; }).join("") + "</tr>";
+        }).join("") + "</tbody></table></div></div>";
+    }
+
+    /* --- 학생부 내신 --- */
+    function tabGpa() {
+      $("#tabBody").innerHTML =
+        '<div class="card"><h2>학생부 내신 평균등급</h2><p class="muted small">평균등급 = Σ(등급 × 단위수) ÷ Σ단위수. 진로선택(성취도 A·B·C) 과목은 대학마다 반영 방식이 달라 제외하고 입력하세요. ' +
+        "실제 대학별 환산점수는 반영 교과·학년별 비율·가산점이 달라 이 평균과 다를 수 있습니다.</p>" +
+        '<div class="toolbar"><label>등급 체계<select id="gSys"><option value="9">9등급제 (2025학년도 고1 이전 입학)</option><option value="5">5등급제 (2025년 고1 입학부터)</option></select></label>' +
+        '<div class="toolbar-actions"><button class="btn btn-ghost" type="button" id="gAdd">+ 과목 추가</button><button class="btn btn-ghost danger" type="button" id="gClear">전체 삭제</button></div></div>' +
+        '<div class="table-wrap"><table class="data-table gpa-table"><thead><tr><th>학기</th><th>교과</th><th>과목명</th><th>단위수(학점)</th><th>석차등급</th><th></th></tr></thead><tbody id="gRows"></tbody></table></div>' +
+        '<div class="kpis wide" id="gStats"></div></div>';
+
+      function rowHtml(r, i) {
+        var max = s.gpa.system === "5" ? 5 : 9;
+        return '<tr data-i="' + i + '"><td><select data-k="sem">' + SEMS.map(function (x) { return "<option" + (x === r.sem ? " selected" : "") + ">" + x + "</option>"; }).join("") + "</select></td>" +
+          '<td><select data-k="group">' + GROUPS.map(function (x) { return "<option" + (x === r.group ? " selected" : "") + ">" + x + "</option>"; }).join("") + "</select></td>" +
+          '<td><input data-k="name" value="' + esc(r.name) + '" placeholder="과목명" /></td>' +
+          '<td><input data-k="unit" type="number" min="1" max="10" inputmode="numeric" value="' + esc(r.unit) + '" /></td>' +
+          '<td><input data-k="grade" type="number" min="1" max="' + max + '" inputmode="numeric" value="' + esc(r.grade) + '" /></td>' +
+          '<td><button type="button" class="icon-btn" data-del aria-label="삭제">×</button></td></tr>';
+      }
+      function avg(rows) {
+        var sum = 0, u = 0, max = s.gpa.system === "5" ? 5 : 9;
+        rows.forEach(function (r) { var g = num(r.grade), w = num(r.unit); if (g >= 1 && g <= max && w > 0) { sum += g * w; u += w; } });
+        return u ? { v: sum / u, u: u } : null;
+      }
+      function stats() {
+        var rows = s.gpa.rows;
+        var pick = function (gs) { return rows.filter(function (r) { return gs.indexOf(r.group) >= 0; }); };
+        var items = [["전과목", avg(rows)], ["국영수사과", avg(pick(["국어", "수학", "영어", "사회", "과학"]))], ["국영수과", avg(pick(["국어", "수학", "영어", "과학"]))], ["국영수사", avg(pick(["국어", "수학", "영어", "사회"]))]];
+        SEMS.forEach(function (sm) { var a = avg(rows.filter(function (r) { return r.sem === sm; })); if (a) items.push([sm + "학기", a]); });
+        $("#gStats").innerHTML = items.map(function (it) {
+          return '<div class="kpi"><span>' + it[0] + "</span><strong>" + (it[1] ? it[1].v.toFixed(2) : "-") + "</strong><small>" + (it[1] ? it[1].u + "단위" : "") + "</small></div>";
+        }).join("");
+      }
+      function render() {
+        $("#gSys").value = s.gpa.system;
+        $("#gRows").innerHTML = s.gpa.rows.map(rowHtml).join("") || '<tr><td colspan="6" class="empty">‘+ 과목 추가’로 과목을 입력하세요.</td></tr>';
+        stats();
+      }
+      $("#gRows").addEventListener("input", function (e) {
+        var tr = e.target.closest("tr"), k = e.target.getAttribute("data-k");
+        if (!tr || !k) return;
+        s.gpa.rows[+tr.getAttribute("data-i")][k] = e.target.value; save(s); stats();
+      });
+      $("#gRows").addEventListener("click", function (e) {
+        if (!e.target.hasAttribute("data-del")) return;
+        s.gpa.rows.splice(+e.target.closest("tr").getAttribute("data-i"), 1); save(s); render();
+      });
+      $("#gAdd").addEventListener("click", function () {
+        var last = s.gpa.rows[s.gpa.rows.length - 1];
+        s.gpa.rows.push({ sem: last ? last.sem : "1-1", group: "국어", name: "", unit: 4, grade: "" }); save(s); render();
+      });
+      $("#gClear").addEventListener("click", function () { if (confirm("입력한 과목을 모두 삭제할까요?")) { s.gpa.rows = []; save(s); render(); } });
+      $("#gSys").addEventListener("change", function () { s.gpa.system = this.value; save(s); render(); });
+      render();
+    }
+
+    /* --- 검정고시 --- */
+    function tabGed() {
+      var g = s.ged;
+      $("#tabBody").innerHTML =
+        '<div class="card"><h2>고졸 검정고시 성적</h2>' +
+        '<p class="muted small">필수 6과목(국어·수학·영어·사회·과학·한국사)과 선택 1과목의 점수(0~100)를 합격증명서·성적증명서 그대로 입력하세요.</p>' +
+        '<div class="table-wrap"><table class="data-table score-table"><thead><tr><th>과목</th><th class="num">점수</th></tr></thead><tbody id="gedRows">' +
+        GED_SUBJ.map(function (n) { return '<tr data-g="' + n + '"><th>' + n + '</th><td class="num"><input type="number" min="0" max="100" step="any" inputmode="decimal" value="' + esc(g.sc[n] == null ? "" : g.sc[n]) + '" /></td></tr>'; }).join("") +
+        '<tr data-g="opt"><th>선택 <select id="gedOpt">' + GED_OPT.map(function (n) { return "<option" + (n === g.opt ? " selected" : "") + ">" + n + "</option>"; }).join("") + "</select></th>" +
+        '<td class="num"><input type="number" min="0" max="100" step="any" inputmode="decimal" value="' + esc(g.sc.opt == null ? "" : g.sc.opt) + '" /></td></tr>' +
+        "</tbody></table></div>" +
+        '<div class="kpis wide" id="gedSum"></div></div>' +
+        '<div class="card"><h2>검정고시 출신자가 알아야 할 것</h2><ul class="plain">' +
+        "<li><b>정시</b>: 재학생·졸업생과 똑같이 수능 점수로만 선발합니다. ‘모의고사·수능’ 탭에 성적을 입력하세요.</li>" +
+        "<li><b>수시 교과·종합</b>: 학생부가 없으므로 대학이 정한 방식으로 검정고시 점수를 내신 등급으로 바꿉니다(‘비교내신’). 검정고시 점수 구간별 환산표를 쓰는 대학, 수능 성적과 연계하는 대학, 서류·면접으로만 보는 대학 등 방식이 모두 다릅니다. <b>같은 평균 점수라도 대학마다 환산 등급이 다르므로</b> 이 사이트는 등급을 임의로 환산하지 않습니다.</li>" +
+        "<li><b>지원 제한</b>: 학교장추천이 필요한 전형은 대부분 지원할 수 없고, 일부 대학은 검정고시 출신자의 수시 지원 자체를 제한합니다.</li>" +
+        "<li><b>확인할 곳</b>: 지원하려는 대학 모집요강의 ‘지원자격’, ‘검정고시 출신자 성적 산출(비교내신)’ 항목. 대학 상세 페이지 하단의 모집요강 원문 링크를 이용하세요.</li>" +
+        "</ul></div>";
+      $("#gedRows").addEventListener("input", function (e) {
+        var tr = e.target.closest("tr"); if (!tr) return;
+        if (e.target.id === "gedOpt") { g.opt = e.target.value; save(s); return; }
+        var v = e.target.value, n = num(v);
+        e.target.classList.toggle("invalid", v !== "" && (n == null || n < 0 || n > 100));
+        g.sc[tr.getAttribute("data-g")] = v; save(s); gedSum();
+      });
+      $("#gedOpt").addEventListener("change", function () { g.opt = this.value; save(s); });
+      gedSum();
+    }
+    function gedSum() {
+      var g = s.ged, vals = GED_SUBJ.map(function (n) { return num(g.sc[n]); }), opt = num(g.sc.opt);
+      var ok = function (a) { return a.every(function (v) { return v != null && v >= 0 && v <= 100; }); };
+      var m6 = ok(vals) ? vals.reduce(function (a, b) { return a + b; }, 0) / 6 : null;
+      var m7 = ok(vals.concat([opt])) ? (vals.reduce(function (a, b) { return a + b; }, 0) + opt) / 7 : null;
+      $("#gedSum").innerHTML =
+        '<div class="kpi"><span>전 과목 평균 (7과목)</span><strong>' + (m7 == null ? "-" : m7.toFixed(2)) + "</strong></div>" +
+        '<div class="kpi"><span>필수 6과목 평균</span><strong>' + (m6 == null ? "-" : m6.toFixed(2)) + "</strong></div>" +
+        '<p class="muted small" style="flex-basis:100%;margin:4px 0 0">평균은 단순 산술평균입니다. 대학별 비교내신 등급은 대학마다 기준이 달라 계산하지 않습니다.</p>';
+    }
+
+    head(); renderTab();
   }
 
   /* ---------- 가이드 ---------- */
