@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# 입시나침반 우분투 서버(sc-kdb) 설치
+# 입시나침반 우분투 서버 설치
 #   사용:  sudo bash /opt/ipsi/admission/deploy/install.sh
 #
-#   * 80 포트는 기존 kdb 사이트가 쓰므로 건드리지 않는다.
+#   * 80 포트는 기존 사이트가 쓰므로 건드리지 않는다.
 #   * 입시 사이트는 127.0.0.1:8500 에서만 응답 (사내망에 노출 안 됨).
 #   * 외부 공개는 Cloudflare 터널: https://ipsi.isjung.com → http://localhost:8500
 #     (deploy/cloudflared_add.sh 로 등록, HTTPS 는 Cloudflare 가 처리)
@@ -28,7 +28,7 @@ apt-get update -y
 FRESH_NGINX=0
 if ! dpkg -s nginx >/dev/null 2>&1; then
   FRESH_NGINX=1
-  # 새로 설치하는 nginx 가 80 포트(기존 kdb 사이트)를 잡지 않도록 설치 중 자동 시작을 막는다
+  # 새로 설치하는 nginx 가 80 포트(기존 사이트)를 잡지 않도록 설치 중 자동 시작을 막는다
   printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d; chmod +x /usr/sbin/policy-rc.d
 fi
 apt-get install -y nginx python3 python3-venv rsync || { rm -f /usr/sbin/policy-rc.d; exit 1; }

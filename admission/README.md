@@ -39,12 +39,12 @@ admission/
 └── deploy/                         우분투 서버 설치 스크립트, nginx 설정
 ```
 
-## 우분투 서버(sc-kdb)에 설치 — https://ipsi.isjung.com
+## 우분투 서버에 설치 — https://ipsi.isjung.com
 
 | 항목 | 값 |
 |---|---|
-| 서버 | sc-kdb (우분투). IP 는 바뀔 수 있으므로 **localhost** 기준으로 연결 |
-| 포트 | **8500** (127.0.0.1 에서만 응답). **80 포트는 기존 kdb 사이트용이라 사용하지 않음** |
+| 서버 | 사내 우분투 서버. IP 는 바뀔 수 있으므로 **localhost** 기준으로 연결 |
+| 포트 | **8500** (127.0.0.1 에서만 응답). **80 포트는 기존 사이트용이라 사용하지 않음** |
 | 외부 공개 | Cloudflare 터널 `/etc/cloudflared/config.yml` 에 `ipsi.isjung.com → http://localhost:8500` |
 | HTTPS | Cloudflare 가 처리. http 로 들어오면 https 로 이동(301) + HSTS |
 
@@ -55,7 +55,7 @@ sudo git clone -b claude/university-admission-info-site-eyllo8 https://github.co
 sudo bash /opt/ipsi/admission/deploy/install.sh
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8500/      # 200 이면 정상
 ```
-- nginx 를 새로 설치하는 경우 설치 중 자동 시작과 기본(80) 사이트를 막아 kdb 사이트와 충돌하지 않습니다.
+- nginx 를 새로 설치하는 경우 설치 중 자동 시작과 기본(80) 사이트를 막아 기존 사이트와 충돌하지 않습니다.
 - 이미 nginx 가 있으면 다른 사이트 설정은 건드리지 않고 입시 사이트 파일만 추가합니다.
 - 방화벽(ufw)은 변경하지 않습니다.
 
