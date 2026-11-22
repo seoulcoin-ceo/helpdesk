@@ -1,0 +1,19 @@
+# 입시나침반 회원 API — 127.0.0.1:8501 에서만 응답 (nginx 가 /api/ 를 전달)
+[Unit]
+Description=ipsi.isjung.com member API
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/ipsi/admission/api
+EnvironmentFile=/etc/ipsi/api.env
+ExecStart=/opt/ipsi-venv/bin/uvicorn app:app --host 127.0.0.1 --port 8501 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ipsi
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

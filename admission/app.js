@@ -33,7 +33,7 @@
     }).then(function (j) { cache[url] = j; return j; });
   }
   function load() { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { return {}; } }
-  function save(s) { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* 무시 */ } }
+  function save(s, noSync) { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* 무시 */ } if (!noSync) scheduleSync(); }
   function uniq(a) { return a.filter(function (v, i) { return v && a.indexOf(v) === i; }); }
   function sourceNote(text) { return '<p class="source">출처: ' + text + "</p>"; }
   var SRC_UNIV = "교육부 대학알리미 「신입생 충원 현황(대학·학과별)」 (공공데이터포털, 공공누리 제1유형)";
@@ -53,6 +53,12 @@
       case "college": p = parts[1] ? pageCollegeDetail(parts[1]) : pageCollegeList(q); break;
       case "dept": p = pageDept(q); break;
       case "calc": p = pageCalc(); break;
+      case "login": p = pageLogin(q); break;
+      case "signup": p = pageSignup(); break;
+      case "account": p = pageAccount(); break;
+      case "child": p = pageChild(parts[1]); break;
+      case "terms": p = pageTerms(); break;
+      case "privacy": p = pagePrivacy(); break;
       case "guide": p = pageGuide(); break;
       case "data": p = pageData(); break;
       default: p = pageHome();
@@ -295,6 +301,7 @@
 
       bindResults();
       loadIpsi(d);
+      favButton(d);
       var open = null;
       function render() {
         var rows = d.departments.filter(function (x) {
@@ -946,12 +953,345 @@
     }).catch(function () { /* 입결 없음 */ });
   }
 
+  /* =========================================================
+   * 회원 (로그인·동기화·관심 대학·결과 제보·학부모 연결)
+   * 서버: /api (admission/api/app.py). 서버가 없거나 꺼져 있어도 나머지 기능은 그대로 동작한다.
+   * ========================================================= */
+  var ME = null;           // 로그인한 회원 (null = 비로그인)
+  var PROV = {};           // 사용 가능한 간편 로그인
+  var syncTimer = null, syncState = "";
+  function api(method, path, body) {
+    var o = { method: method, credentials: "same-origin", headers: { "x-ipsi": "1" } };
+    if (body !== undefined) { o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(body); }
+    return fetch("/api" + path, o).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) { var e = new Error(j.error || ("오류 " + r.status)); e.status = r.status; throw e; }
+        return j;
+      });
+    });
+  }
+  function canSync() { return ME && !ME.needConsent; }
+  function scheduleSync() {
+    if (!canSync()) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(pushData, 1200);
+  }
+  function pushData() {
+    if (!canSync()) return Promise.resolve();
+    syncState = "저장 중…"; showSync();
+    return api("PUT", "/data", load()).then(function () { syncState = "서버에 저장됨"; showSync(); })
+      .catch(function (e) { syncState = "서버 저장 실패: " + e.message; showSync(); });
+  }
+  function showSync() { var el = $("#syncNote"); if (el) el.textContent = syncState; }
+  function hasContent(s) { return !!(s && ((s.exams && s.exams.length) || (s.gpa && s.gpa.rows && s.gpa.rows.length) || (s.fav && s.fav.length))); }
+  // 로그인 직후: 서버 자료와 이 기기 자료를 맞춘다
+  function pullData() {
+    if (!canSync()) return Promise.resolve();
+    return api("GET", "/data").then(function (r) {
+      var local = load();
+      if (!r.data) { if (hasContent(local)) return pushData(); return; }
+      if (!hasContent(local) || JSON.stringify(local) === JSON.stringify(r.data)) { save(r.data, true); return; }
+      ME.conflict = r.data;   // 둘 다 있고 다르면 내 계정 화면에서 고르게 한다
+    }).catch(function () { /* 무시 */ });
+  }
+  function refreshMe() {
+    return api("GET", "/me").then(function (u) { ME = u; }).catch(function () { ME = null; }).then(navAccount);
+  }
+  function navAccount() {
+    var a = $("#navAccount");
+    if (!a) return;
+    a.textContent = ME ? (ME.name || "내 계정") : "로그인";
+    a.setAttribute("href", ME ? "#/account" : "#/login");
+  }
+  function needLogin(next) {
+    view.innerHTML = '<section class="section"><div class="card narrow"><h1>로그인이 필요합니다</h1><p class="muted">이 기능은 회원만 쓸 수 있습니다.</p>' +
+      '<a class="btn btn-primary" href="#/login?next=' + encodeURIComponent(next || "") + '">로그인</a> <a class="btn btn-ghost" href="#/signup">회원가입</a></div></section>';
+  }
+
+  /* --- 약관 동의 양식 (일반 가입·간편 로그인 공통) --- */
+  function consentFields(u) {
+    u = u || {};
+    return '<label>이름(별명)<input name="name" maxlength="30" value="' + esc(u.name || "") + '" autocomplete="nickname" /></label>' +
+      '<fieldset class="roles"><legend>회원 구분</legend>' +
+      '<label class="check"><input type="radio" name="role" value="student"' + (u.role !== "parent" ? " checked" : "") + " /> 학생(수험생)</label>" +
+      '<label class="check"><input type="radio" name="role" value="parent"' + (u.role === "parent" ? " checked" : "") + " /> 학부모</label></fieldset>" +
+      '<div class="consents">' +
+      '<label class="check"><input type="checkbox" name="agreeTerms" /> (필수) <a href="#/terms" target="_blank">이용약관</a>에 동의합니다</label>' +
+      '<label class="check"><input type="checkbox" name="agreePrivacy" /> (필수) <a href="#/privacy" target="_blank">개인정보 수집·이용</a>에 동의합니다</label>' +
+      '<label class="check"><input type="checkbox" name="age14" /> (필수) 만 14세 이상입니다</label>' +
+      '<label class="check"><input type="checkbox" name="reportConsent" /> (선택) 내가 제보한 합격·불합격 결과를 개인을 알 수 없게 통계로 만들어 합격 예측에 쓰는 데 동의합니다</label></div>';
+  }
+  function consentValues(f) {
+    return { name: f.name.value.trim(), role: f.role.value, agreeTerms: f.agreeTerms.checked, agreePrivacy: f.agreePrivacy.checked,
+      age14: f.age14.checked, reportConsent: f.reportConsent.checked };
+  }
+
+  function pageLogin(q) {
+    var next = q.get("next") || "account";
+    var msg = q.get("error");
+    view.innerHTML = '<section class="section"><div class="card narrow"><h1>로그인</h1>' +
+      (msg ? '<p class="form-error">' + esc(msg) + "</p>" : "") +
+      '<div id="socialBox"></div>' +
+      '<form id="loginForm" class="form"><label>이메일<input name="email" type="email" required autocomplete="username" /></label>' +
+      '<label>비밀번호<input name="password" type="password" required autocomplete="current-password" /></label>' +
+      '<p class="form-error" id="lErr"></p><button class="btn btn-primary" type="submit">로그인</button></form>' +
+      '<p class="muted small">아직 회원이 아니신가요? <a href="#/signup">회원가입</a></p></div></section>';
+    socialButtons($("#socialBox"));
+    $("#loginForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var f = this;
+      api("POST", "/auth/login", { email: f.email.value, password: f.password.value }).then(function (u) {
+        ME = u; navAccount(); return pullData();
+      }).then(function () { location.hash = "#/" + next; }).catch(function (er) { $("#lErr").textContent = er.message; });
+    });
+  }
+  function socialButtons(box) {
+    var html = "";
+    if (PROV.kakao) html += '<a class="btn btn-kakao" href="/api/auth/kakao/start">카카오로 시작하기</a>';
+    if (PROV.naver) html += '<a class="btn btn-naver" href="/api/auth/naver/start">네이버로 시작하기</a>';
+    box.innerHTML = html ? '<div class="social">' + html + '</div><p class="divider"><span>또는 이메일로</span></p>' : "";
+  }
+  function pageSignup() {
+    view.innerHTML = '<section class="section"><div class="card narrow"><h1>회원가입</h1><div id="socialBox"></div>' +
+      '<form id="suForm" class="form"><label>이메일<input name="email" type="email" required autocomplete="username" /></label>' +
+      '<label>비밀번호 (8자 이상, 영문+숫자)<input name="password" type="password" required minlength="8" autocomplete="new-password" /></label>' +
+      '<label>비밀번호 확인<input name="password2" type="password" required autocomplete="new-password" /></label>' +
+      consentFields() + '<p class="form-error" id="sErr"></p><button class="btn btn-primary" type="submit">가입하기</button></form>' +
+      '<p class="muted small">이미 회원이신가요? <a href="#/login">로그인</a></p></div></section>';
+    socialButtons($("#socialBox"));
+    $("#suForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var f = this;
+      if (f.password.value !== f.password2.value) { $("#sErr").textContent = "비밀번호가 서로 다릅니다."; return; }
+      var b = consentValues(f); b.email = f.email.value; b.password = f.password.value;
+      api("POST", "/auth/signup", b).then(function (u) { ME = u; navAccount(); return pullData(); })
+        .then(function () { location.hash = "#/account"; }).catch(function (er) { $("#sErr").textContent = er.message; });
+    });
+  }
+
+  /* --- 내 계정 --- */
+  function pageAccount() {
+    return refreshMe().then(function () {
+      if (!ME) return needLogin("account");
+      if (ME.needConsent) return pageConsent();
+      var s = load();
+      var fav = s.fav || [];
+      view.innerHTML = '<section class="section"><div class="section-head"><h1>내 계정</h1><p>' + esc(ME.name || "") + " · " +
+        (ME.role === "parent" ? "학부모" : "학생") + (ME.email ? " · " + esc(ME.email) : "") +
+        (ME.providers.length ? " · " + ME.providers.map(function (p) { return p === "kakao" ? "카카오" : "네이버"; }).join("·") + " 로그인" : "") +
+        ' <span class="muted small" id="syncNote">' + esc(syncState) + "</span></p></div>" +
+        (ME.conflict ? '<div class="callout"><b>이 기기와 서버에 서로 다른 성적이 저장되어 있습니다.</b> 어느 쪽을 쓸지 고르세요. 고르지 않은 쪽은 덮어씁니다.<div class="toolbar-actions" style="margin:10px 0 0">' +
+          '<button class="btn btn-primary" id="useServer">서버에 저장된 성적 쓰기</button><button class="btn btn-ghost" id="useLocal">이 기기의 성적을 서버에 올리기</button></div></div>' : "") +
+        '<div class="grid-2">' +
+        '<div class="card"><h2>관심 대학</h2>' + (fav.length ? '<ul class="plain">' + fav.map(function (f, i) {
+          return '<li><a href="#/univ/' + esc(f.code) + '">' + esc(f.name) + '</a> <button class="icon-btn" data-unfav="' + i + '" aria-label="삭제">×</button></li>';
+        }).join("") + "</ul>" : '<p class="muted">대학 상세 페이지에서 ‘☆ 관심 대학’을 누르면 여기에 모입니다.</p>') + "</div>" +
+        '<div class="card"><h2>' + (ME.role === "parent" ? "자녀 계정 연결" : "학부모와 연결") + '</h2><div id="linkBox">불러오는 중…</div></div></div>' +
+        (ME.role === "student" ? '<div class="card"><h2>합격·불합격 결과 제보</h2><div id="repBox"></div></div>' : "") +
+        '<div class="card"><h2>계정 설정</h2><form id="setForm" class="form inline-form">' +
+        '<label>이름(별명)<input name="name" maxlength="30" value="' + esc(ME.name || "") + '" /></label>' +
+        '<label>회원 구분<select name="role"><option value="student"' + (ME.role !== "parent" ? " selected" : "") + '>학생</option><option value="parent"' + (ME.role === "parent" ? " selected" : "") + ">학부모</option></select></label>" +
+        '<label class="check"><input type="checkbox" name="reportConsent"' + (ME.reportConsent ? " checked" : "") + " /> 결과 제보를 익명 통계에 활용하는 데 동의</label>" +
+        '<button class="btn btn-ghost" type="submit">저장</button></form>' +
+        (ME.email && !ME.providers.length ? '<form id="pwForm" class="form inline-form"><label>현재 비밀번호<input name="password" type="password" autocomplete="current-password" /></label>' +
+          '<label>새 비밀번호<input name="newPassword" type="password" autocomplete="new-password" /></label><button class="btn btn-ghost" type="submit">비밀번호 변경</button></form>' : "") +
+        '<p class="form-error" id="setErr"></p>' +
+        '<div class="toolbar-actions"><button class="btn btn-ghost" id="logout">로그아웃</button><button class="btn btn-ghost danger" id="quit">회원 탈퇴</button></div></div></section>';
+
+      if (ME.conflict) {
+        $("#useServer").addEventListener("click", function () { save(ME.conflict, true); ME.conflict = null; pageAccount(); });
+        $("#useLocal").addEventListener("click", function () { ME.conflict = null; pushData().then(pageAccount); });
+      }
+      $all("[data-unfav]").forEach(function (b) {
+        b.addEventListener("click", function () { var t = load(); t.fav.splice(+b.getAttribute("data-unfav"), 1); save(t); pageAccount(); });
+      });
+      $("#setForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        api("PUT", "/me", { name: this.name.value, role: this.role.value, reportConsent: this.reportConsent.checked })
+          .then(function (u) { ME = u; navAccount(); pageAccount(); }).catch(function (er) { $("#setErr").textContent = er.message; });
+      });
+      if ($("#pwForm")) $("#pwForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var f = this;
+        api("PUT", "/me", { password: f.password.value, newPassword: f.newPassword.value })
+          .then(function () { f.reset(); $("#setErr").textContent = "비밀번호를 바꿨습니다."; }).catch(function (er) { $("#setErr").textContent = er.message; });
+      });
+      $("#logout").addEventListener("click", function () {
+        api("POST", "/auth/logout").then(function () { ME = null; navAccount(); location.hash = "#/"; });
+      });
+      $("#quit").addEventListener("click", function () {
+        if (!confirm("탈퇴하면 서버에 저장된 성적·관심 대학·제보 결과·연결 정보가 모두 즉시 삭제되고 되돌릴 수 없습니다. 탈퇴할까요?")) return;
+        api("DELETE", "/me").then(function () { ME = null; navAccount(); alert("탈퇴했습니다. 이 기기 브라우저에 남은 성적은 ‘내 성적’ 화면에서 지울 수 있습니다."); location.hash = "#/"; })
+          .catch(function (er) { $("#setErr").textContent = er.message; });
+      });
+      linkBox();
+      if (ME.role === "student") repBox();
+    });
+  }
+  function pageConsent() {
+    view.innerHTML = '<section class="section"><div class="card narrow"><h1>가입 마무리</h1><p class="muted">간편 로그인으로 처음 오셨습니다. 아래 내용을 확인해 주세요.</p>' +
+      '<form id="cForm" class="form">' + consentFields(ME) + '<p class="form-error" id="cErr"></p><button class="btn btn-primary" type="submit">시작하기</button></form>' +
+      '<p class="muted small">동의하지 않으려면 <a href="#" id="cCancel">가입 취소(계정 삭제)</a></p></div></section>';
+    $("#cForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      api("POST", "/me/consent", consentValues(this)).then(function (u) { ME = u; navAccount(); return pullData(); })
+        .then(pageAccount).catch(function (er) { $("#cErr").textContent = er.message; });
+    });
+    $("#cCancel").addEventListener("click", function (e) {
+      e.preventDefault();
+      api("DELETE", "/me").then(function () { ME = null; navAccount(); location.hash = "#/"; });
+    });
+  }
+
+  function linkBox() {
+    var box = $("#linkBox");
+    api("GET", "/link").then(function (list) {
+      var rows = list.length ? '<ul class="plain">' + list.map(function (l) {
+        return "<li>" + (ME.role === "parent" ? '<a href="#/child/' + l.uid + '">' + esc(l.name || l.email || "자녀") + "</a>" : esc(l.name || l.email || "학부모")) +
+          ' <button class="icon-btn" data-unlink="' + l.id + '" aria-label="연결 해제">×</button></li>';
+      }).join("") + "</ul>" : '<p class="muted">연결된 계정이 없습니다.</p>';
+      if (ME.role === "parent") {
+        box.innerHTML = rows + '<form id="acceptForm" class="form inline-form"><label>자녀가 알려준 연결 코드<input name="code" maxlength="6" placeholder="6자리" /></label>' +
+          '<button class="btn btn-ghost" type="submit">연결</button></form><p class="form-error" id="lkErr"></p>' +
+          '<p class="muted small">자녀가 자기 계정의 ‘학부모와 연결’에서 코드를 만들어 알려 주면, 자녀의 성적·관심 대학·결과를 읽기 전용으로 볼 수 있습니다.</p>';
+        $("#acceptForm").addEventListener("submit", function (e) {
+          e.preventDefault();
+          api("POST", "/link/accept", { code: this.code.value }).then(linkBox).catch(function (er) { $("#lkErr").textContent = er.message; });
+        });
+      } else {
+        box.innerHTML = rows + '<button class="btn btn-ghost" id="mkCode">연결 코드 만들기</button> <strong id="codeOut" class="code"></strong>' +
+          '<p class="muted small">코드를 학부모에게 알려 주세요(24시간 유효). 연결된 학부모는 내 성적·관심 대학·제보 결과를 볼 수만 있고 고칠 수는 없습니다. ×로 언제든 연결을 끊을 수 있습니다.</p>';
+        $("#mkCode").addEventListener("click", function () { api("POST", "/link/code").then(function (r) { $("#codeOut").textContent = r.code; }); });
+      }
+      $all("[data-unlink]").forEach(function (b) {
+        b.addEventListener("click", function () { if (confirm("연결을 끊을까요?")) api("DELETE", "/link/" + b.getAttribute("data-unlink")).then(linkBox); });
+      });
+    }).catch(function (e) { box.textContent = e.message; });
+  }
+
+  var TRACKS = ["수시 교과", "수시 종합", "수시 논술", "수시 실기", "수시 기타", "정시 가군", "정시 나군", "정시 다군"];
+  var RESULTS = ["최초합격", "추가합격", "예비번호 대기", "불합격", "1단계 합격", "1단계 불합격", "등록 포기"];
+  function repBox() {
+    var box = $("#repBox");
+    if (!ME.reportConsent) {
+      box.innerHTML = '<p class="muted">결과 제보는 ‘계정 설정’에서 익명 통계 활용에 동의한 뒤 쓸 수 있습니다. 제보된 결과는 이름·이메일 없이 합격 예측 통계에만 쓰입니다.</p>';
+      return;
+    }
+    api("GET", "/reports").then(function (list) {
+      var y = new Date().getFullYear() + 1;
+      box.innerHTML = '<p class="muted small">수시·정시 결과가 나오면 입력해 주세요. 이름·이메일 없이 합격 예측 통계에만 쓰이며, 언제든 지울 수 있습니다.</p>' +
+        '<form id="repForm" class="form inline-form">' +
+        '<label>학년도<input name="year" type="number" min="2015" max="2040" value="' + y + '" /></label>' +
+        '<label>전형 구분<select name="track">' + TRACKS.map(function (t) { return "<option>" + t + "</option>"; }).join("") + "</select></label>" +
+        '<label>대학<input name="univName" list="univList" required placeholder="대학명" /></label>' +
+        '<datalist id="univList">' + IDX.univ.map(function (u) { return '<option value="' + esc(u.name) + '">'; }).join("") + "</datalist>" +
+        '<label>학과(모집단위)<input name="dept" required /></label>' +
+        '<label>전형명<input name="jeonhyeong" placeholder="예: 학생부교과(지역균형)" /></label>' +
+        '<label>결과<select name="result">' + RESULTS.map(function (t) { return "<option>" + t + "</option>"; }).join("") + "</select></label>" +
+        '<label class="check"><input type="checkbox" name="snap" checked /> 지금 저장된 내 성적(내신·모의고사·수능)을 함께 보냄</label>' +
+        '<button class="btn btn-primary" type="submit">결과 등록</button></form><p class="form-error" id="rErr"></p>' +
+        (list.length ? '<div class="table-wrap"><table class="data-table"><thead><tr><th>학년도</th><th>전형</th><th>대학</th><th>학과</th><th>전형명</th><th>결과</th><th></th></tr></thead><tbody>' +
+          list.map(function (r) {
+            return "<tr><td>" + r.year + "</td><td>" + esc(r.track) + "</td><td>" + esc(r.univ_name) + "</td><td>" + esc(r.dept) + "</td><td>" + esc(r.jeonhyeong) +
+              "</td><td><b>" + esc(r.result) + '</b></td><td><button class="icon-btn" data-rdel="' + r.id + '" aria-label="삭제">×</button></td></tr>';
+          }).join("") + "</tbody></table></div>" : "");
+      $("#repForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var f = this, name = f.univName.value.trim();
+        var u = IDX.univ.filter(function (x) { return x.name === name; })[0];
+        var st = load();
+        api("POST", "/reports", { year: +f.year.value, track: f.track.value, univName: name, univCode: u ? u.code : "", dept: f.dept.value,
+          jeonhyeong: f.jeonhyeong.value, result: f.result.value,
+          snapshot: f.snap.checked ? { gpa: st.gpa, exams: st.exams, ged: st.ged, who: st.who } : null })
+          .then(repBox).catch(function (er) { $("#rErr").textContent = er.message; });
+      });
+      $all("[data-rdel]").forEach(function (b) {
+        b.addEventListener("click", function () { if (confirm("이 결과를 지울까요?")) api("DELETE", "/reports/" + b.getAttribute("data-rdel")).then(repBox); });
+      });
+    }).catch(function (e) { box.textContent = e.message; });
+  }
+
+  /* --- 학부모: 자녀 성적 보기 (읽기 전용) --- */
+  function pageChild(id) {
+    return refreshMe().then(function () {
+      if (!ME) return needLogin("child/" + id);
+      return api("GET", "/children/" + encodeURIComponent(id)).then(function (c) {
+        var d = c.data || {}, ex = d.exams || [], fav = d.fav || [];
+        var cols = [["kor", "국어"], ["math", "수학"], ["eng", "영어"], ["t1", "탐구1"], ["t2", "탐구2"], ["his", "한국사"]];
+        var gp = (d.gpa && d.gpa.rows) || [], sum = 0, un = 0, mx = d.gpa && d.gpa.system === "5" ? 5 : 9;
+        gp.forEach(function (r) { var g = num(r.grade), w = num(r.unit); if (g >= 1 && g <= mx && w > 0) { sum += g * w; un += w; } });
+        view.innerHTML = '<section class="section"><p class="crumb"><a href="#/account">내 계정</a> ›</p><div class="section-head"><h1>' + esc(c.name || c.email || "자녀") + "의 성적</h1>" +
+          '<p class="muted">읽기 전용 · 마지막 저장 ' + (c.updated ? new Date(c.updated * 1000).toLocaleString("ko-KR") : "없음") + "</p></div>" +
+          '<div class="card"><h2>모의고사·수능 등급</h2>' + (ex.length ? '<div class="table-wrap"><table class="data-table"><thead><tr><th>시험</th>' +
+            cols.map(function (x) { return '<th class="num">' + x[1] + "</th>"; }).join("") + "</tr></thead><tbody>" +
+            ex.map(function (e) { return "<tr><td>" + esc((e.year ? e.year + "학년도 " : "") + e.kind) + "</td>" + cols.map(function (x) { return '<td class="num">' + (gradeOf(e, x[0]) || "-") + "</td>"; }).join("") + "</tr>"; }).join("") +
+            "</tbody></table></div>" : '<p class="muted">입력된 시험 성적이 없습니다.</p>') + "</div>" +
+          '<div class="grid-2"><div class="card"><h2>내신 평균등급</h2><p class="kpi-big">' + (un ? (sum / un).toFixed(2) + "등급" : "-") + '</p><p class="muted small">전과목, ' + un + "단위 · " + mx + "등급제</p></div>" +
+          '<div class="card"><h2>관심 대학</h2>' + (fav.length ? '<ul class="plain">' + fav.map(function (f) { return '<li><a href="#/univ/' + esc(f.code) + '">' + esc(f.name) + "</a></li>"; }).join("") + "</ul>" : '<p class="muted">없음</p>') + "</div></div>" +
+          '<div class="card"><h2>합격·불합격 결과</h2>' + (c.reports.length ? '<ul class="plain">' + c.reports.map(function (r) {
+            return "<li>" + r.year + " " + esc(r.track) + " · " + esc(r.univ_name) + " " + esc(r.dept) + " — <b>" + esc(r.result) + "</b></li>";
+          }).join("") + "</ul>" : '<p class="muted">없음</p>') + "</div></section>";
+      }).catch(function (e) { view.innerHTML = '<section class="section"><p>' + esc(e.message) + "</p></section>"; });
+    });
+  }
+
+  /* --- 관심 대학 버튼 (대학 상세) --- */
+  function favButton(d) {
+    var head = $(".detail-head h1");
+    if (!head) return;
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "btn btn-ghost fav-btn";
+    function paint() { var on = (load().fav || []).some(function (f) { return f.code === d.code; }); b.textContent = on ? "★ 관심 대학" : "☆ 관심 대학"; b.setAttribute("aria-pressed", String(on)); }
+    b.addEventListener("click", function () {
+      var s = load(); s.fav = s.fav || [];
+      var i = s.fav.map(function (f) { return f.code; }).indexOf(d.code);
+      if (i >= 0) s.fav.splice(i, 1); else s.fav.push({ code: d.code, name: d.name + (d.campus && d.campus !== "본교" ? " (" + d.campus + ")" : "") });
+      save(s); paint();
+      if (!ME) { syncState = ""; }
+    });
+    paint();
+    head.parentNode.appendChild(b);
+  }
+
+  /* --- 약관·개인정보처리방침 (운영자 정보는 반드시 실제 내용으로 바꿔야 함) --- */
+  var OPERATOR = "[운영자(회사)명 입력 필요]", OFFICER = "[개인정보 보호책임자 성명·연락처 입력 필요]";
+  function pageTerms() {
+    view.innerHTML = '<section class="section"><div class="card narrow doc"><h1>이용약관</h1>' +
+      "<p>시행일: [시행일 입력 필요]</p>" +
+      "<h2>제1조 (목적)</h2><p>이 약관은 " + OPERATOR + "(이하 ‘운영자’)가 제공하는 입시나침반(ipsi.isjung.com, 이하 ‘서비스’) 이용 조건과 절차를 정합니다.</p>" +
+      "<h2>제2조 (서비스 내용)</h2><p>서비스는 공공기관·대학이 공개한 입시 자료 조회, 회원의 성적 기록·정리, 수능 최저 충족 계산, 관심 대학 저장, 결과 제보, 학부모-자녀 계정 연결 기능을 제공합니다.</p>" +
+      "<h2>제3조 (정보의 성격)</h2><p>서비스가 보여 주는 수치는 원출처 자료를 옮긴 것이며, 계산 결과와 예측은 참고용입니다. 지원 결정 전에는 반드시 해당 대학의 최신 모집요강을 확인해야 하며, 운영자는 서비스 정보만으로 내린 지원 결정의 결과에 책임을 지지 않습니다.</p>" +
+      "<h2>제4조 (회원가입과 탈퇴)</h2><p>만 14세 이상인 사람만 가입할 수 있습니다. 회원은 ‘내 계정’에서 언제든 탈퇴할 수 있으며, 탈퇴하면 회원의 모든 정보가 즉시 삭제됩니다.</p>" +
+      "<h2>제5조 (회원의 의무)</h2><p>회원은 타인의 정보를 도용하거나 사실이 아닌 결과를 제보해서는 안 되며, 계정 정보를 스스로 관리해야 합니다.</p>" +
+      "<h2>제6조 (약관 변경)</h2><p>약관을 바꿀 때는 시행 7일 전부터 서비스에 알립니다.</p>" +
+      '<p class="muted small">이 약관은 초안입니다. 운영 전에 운영자 정보와 내용을 검토해 확정하세요.</p></div></section>';
+  }
+  function pagePrivacy() {
+    view.innerHTML = '<section class="section"><div class="card narrow doc"><h1>개인정보 처리방침</h1>' +
+      "<p>" + OPERATOR + "는 「개인정보 보호법」에 따라 회원의 개인정보를 다음과 같이 처리합니다. 시행일: [시행일 입력 필요]</p>" +
+      '<h2>1. 수집 항목과 목적</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>구분</th><th>항목</th><th>목적</th></tr></thead><tbody>' +
+      "<tr><td>필수</td><td>이메일, 비밀번호(암호화 저장), 이름(별명), 회원 구분 / 간편 로그인 시 카카오·네이버 회원 식별값, 이메일, 별명</td><td>회원 식별, 로그인</td></tr>" +
+      "<tr><td>회원이 입력한 경우</td><td>내신·모의고사·수능·검정고시 성적, 관심 대학</td><td>성적 저장과 여러 기기 간 동기화, 계산 기능 제공</td></tr>" +
+      "<tr><td>선택 동의 시</td><td>합격·불합격 결과(대학·학과·전형·결과)와 함께 보낸 성적</td><td>개인을 알아볼 수 없게 처리한 합격 예측 통계 작성</td></tr>" +
+      "<tr><td>자동 수집</td><td>로그인 유지용 쿠키, 접속 기록</td><td>로그인 유지, 부정 이용 방지</td></tr></tbody></table></div>" +
+      "<h2>2. 보유 기간</h2><p>회원 탈퇴 시 즉시 삭제합니다. 다만 결과 제보로 만든 통계는 개인을 알아볼 수 없는 형태이므로 탈퇴 후에도 남을 수 있습니다.</p>" +
+      "<h2>3. 제3자 제공·처리 위탁</h2><p>회원의 개인정보를 제3자에게 제공하거나 판매하지 않습니다. 회원이 연결한 학부모 계정은 해당 자녀의 성적·관심 대학·제보 결과를 볼 수 있으며, 회원은 언제든 연결을 끊을 수 있습니다.</p>" +
+      "<h2>4. 만 14세 미만</h2><p>만 14세 미만은 가입할 수 없습니다.</p>" +
+      "<h2>5. 회원의 권리</h2><p>회원은 언제든 자신의 정보를 조회·수정·삭제하고 탈퇴할 수 있습니다(‘내 계정’). 비회원으로 입력한 성적은 이용자의 브라우저에만 저장되며 서버로 전송되지 않습니다.</p>" +
+      "<h2>6. 안전성 확보 조치</h2><p>비밀번호는 복원할 수 없는 방식(scrypt)으로 암호화하고, 모든 통신은 HTTPS로 암호화합니다.</p>" +
+      "<h2>7. 개인정보 보호책임자</h2><p>" + OFFICER + "</p>" +
+      '<p class="muted small">이 방침은 초안입니다. 운영 전에 운영자·책임자 정보와 내용을 검토해 확정하세요.</p></div></section>';
+  }
+
   /* ---------- 시작 ---------- */
   getJSON("data/index.json").then(function (j) {
     IDX = j;
     $("#footerSources").innerHTML = "데이터 기준: " + esc(j.meta.built) + "<br>" + j.meta.sources.map(function (s) { return esc(s.name); }).join("<br>");
     view.classList.remove("loading");
-    route();
+    // 회원 API 가 없거나 응답하지 않아도 사이트는 그대로 연다
+    return refreshMe().then(function () {
+      return api("GET", "/auth/providers").then(function (p) { PROV = p; }).catch(function () {});
+    }).then(pullData).then(route);
   }).catch(function (e) {
     view.innerHTML = '<div class="section"><h1>데이터를 불러오지 못했습니다</h1><p class="muted">' + esc(e.message) + "</p><p>웹서버(nginx 등)를 통해 접속해야 합니다. 파일을 직접 열면 동작하지 않습니다.</p></div>";
   });

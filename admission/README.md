@@ -81,6 +81,16 @@ sudo bash /opt/ipsi/admission/deploy/update_data.sh                      # 데�
 매월 1일 새벽 자동 갱신이 등록됩니다(`/etc/cron.d/ipsi-data`, 로그 `/var/log/ipsi-data.log`).
 서버는 data.go.kr, jinhak.gne.go.kr 에 나가는 인터넷 연결이 필요합니다.
 
+### 4. 회원 로그인 (카카오·네이버·이메일)
+`install.sh` 가 회원 API(`127.0.0.1:8501`, systemd `ipsi-api`)와 DB(`/var/lib/ipsi/ipsi.db`)를 설치하고, nginx 가 `/api/` 를 전달합니다. 이메일 가입은 바로 동작합니다.
+
+간편 로그인을 켜려면 개발자 사이트에 앱을 등록하고 `/etc/ipsi/api.env` 에 키를 넣은 뒤 `sudo systemctl restart ipsi-api`:
+- 카카오: developers.kakao.com → 내 애플리케이션 → 앱 추가 → 플랫폼 Web 사이트 도메인 `https://ipsi.isjung.com` → 카카오 로그인 활성화, Redirect URI `https://ipsi.isjung.com/api/auth/kakao/callback` → 동의항목: 닉네임(필수), 카카오계정(이메일)(선택) → `KAKAO_CLIENT_ID`(REST API 키), 보안 탭 Client Secret 사용 시 `KAKAO_CLIENT_SECRET`
+- 네이버: developers.naver.com → Application 등록 → 네이버 로그인, 제공 정보: 회원이름·이메일 → 서비스 URL `https://ipsi.isjung.com`, Callback URL `https://ipsi.isjung.com/api/auth/naver/callback` → `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`
+
+DB 백업: `sudo sqlite3 /var/lib/ipsi/ipsi.db ".backup /mnt/backup/ipsi/ipsi-$(date +%F).db"` (매일 cron 등록 권장)
+**운영 전 필수**: 이용약관·개인정보 처리방침(`#/terms`, `#/privacy`)의 운영자명·보호책임자·시행일을 실제 정보로 채우세요 (`app.js` 의 `OPERATOR`, `OFFICER`).
+
 ## 데이터 정의
 - **경쟁률** = 정원내 지원자 ÷ 정원내 모집인원 (수시·정시 합산, 대학알리미 공시 정의)
 - **신입생 충원율** = 정원내 입학자 ÷ 정원내 모집인원. 일부 대학은 모집단위와 입학자 공시 단위가 달라 입학자가 0으로 공시되며, 이 경우 ‘-’로 표시
