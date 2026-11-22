@@ -2,8 +2,11 @@
 # 입시나침반 우분투 서버 설치 (Ubuntu 22.04 / 24.04)
 #   기본 주소: ipsi.isjung.com  (기존 isjung.com 업무시스템은 건드리지 않음)
 #
-#   Cloudflare 터널/프록시 사용 (권장, 사내 서버):  sudo bash deploy/install.sh
-#   서버가 인터넷에 직접 노출되어 인증서도 직접 발급:  sudo CERTBOT=1 EMAIL=you@example.com bash deploy/install.sh
+#   방문자는 항상 HTTPS 로만 접속됩니다(http 요청은 https 로 이동).
+#   A) Cloudflare 터널(권장, 사내 서버):  sudo bash deploy/install.sh
+#   B) Cloudflare 프록시 + 포트포워딩:   Cloudflare 원본 인증서(Origin Certificate)를 서버에 저장한 뒤
+#        sudo TLS_CERT=/etc/ssl/cloudflare/ipsi.pem TLS_KEY=/etc/ssl/cloudflare/ipsi.key bash deploy/install.sh
+#   C) Cloudflare 없이 직접 노출:         sudo CERTBOT=1 EMAIL=you@example.com bash deploy/install.sh
 #   다른 주소로 설치:  sudo DOMAIN=example.com bash deploy/install.sh
 set -euo pipefail
 
@@ -30,7 +33,13 @@ rsync -a --delete --exclude pipeline --exclude deploy --exclude README.md --excl
 chown -R www-data:www-data "${WEBROOT}"
 
 echo "[4/5] nginx 설정"
-sed "s/__DOMAIN__/${DOMAIN}/g" "${APP_DIR}/deploy/nginx-site.conf" > "/etc/nginx/sites-available/${DOMAIN}"
+TLS_LINES=""
+if [ -n "${TLS_CERT:-}" ]; then
+  [ -f "${TLS_CERT}" ] && [ -f "${TLS_KEY:?TLS_KEY 를 지정하세요}" ] || { echo "인증서 파일이 없습니다: ${TLS_CERT} / ${TLS_KEY}"; exit 1; }
+  TLS_LINES="listen 443 ssl http2; listen [::]:443 ssl http2; ssl_certificate ${TLS_CERT}; ssl_certificate_key ${TLS_KEY}; ssl_protocols TLSv1.2 TLSv1.3;"
+  if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then ufw allow 'Nginx Full'; fi
+fi
+sed -e "s/__DOMAIN__/${DOMAIN}/g" -e "s|#__TLS_LISTEN__|${TLS_LINES}|" "${APP_DIR}/deploy/nginx-site.conf" > "/etc/nginx/sites-available/${DOMAIN}"
 ln -sf "/etc/nginx/sites-available/${DOMAIN}" "/etc/nginx/sites-enabled/${DOMAIN}"
 nginx -t
 systemctl enable --now nginx

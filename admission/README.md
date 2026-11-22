@@ -53,18 +53,22 @@ sudo bash /opt/ipsi/admission/deploy/install.sh
 ```
 확인 (같은 사내망 PC 에서): `curl -H "Host: ipsi.isjung.com" http://192.168.0.7/` → HTML 이 나오면 정상.
 
-### 2. Cloudflare 에서 주소 연결
-isjung.com 이 어떻게 연결돼 있는지에 따라 하나를 고르세요.
+### 2. Cloudflare 에서 주소 연결 (HTTPS 전용)
+방문자는 **항상 https://ipsi.isjung.com** 으로만 접속됩니다. http 로 들어오면 서버가 https 로 이동시키고(301), 브라우저에 HTTPS 고정(HSTS)을 알립니다.
 
-**A. Cloudflare 터널(cloudflared)을 쓰는 경우 — 사내 서버라면 대부분 이 방식**
-1. Cloudflare 대시보드 → Zero Trust → Networks → Tunnels → isjung.com 에 쓰는 터널 선택 → *Public Hostname* → **Add a public hostname**
-2. Subdomain `ipsi`, Domain `isjung.com`, Service Type `HTTP`, URL `192.168.0.7:80` → 저장
-3. 1~2분 뒤 https://ipsi.isjung.com 접속
+**A. Cloudflare 터널(cloudflared) — 사내 서버라면 이 방식 권장**
+1. Cloudflare → Zero Trust → Networks → Tunnels → isjung.com 에 쓰는 터널 → *Public Hostname* → **Add a public hostname**
+2. Subdomain `ipsi`, Domain `isjung.com`, Service `HTTP`, URL `192.168.0.7:80` → 저장
+3. 터널 구간은 Cloudflare 가 암호화하므로 서버 인증서가 필요 없습니다. 방문자 구간 HTTPS 인증서는 Cloudflare 가 자동 발급합니다.
 
-**B. 공유기 포트포워딩 + DNS(A 레코드)를 쓰는 경우**
-80/443 포트가 이미 업무시스템 서버(예: 192.168.0.10)로 가고 있으므로, 그 서버의 웹서버(nginx 등)에
-`ipsi.isjung.com` 요청을 `http://192.168.0.7` 로 넘기는 설정을 추가하고, Cloudflare DNS 에
-`ipsi` CNAME `isjung.com` (프록시 켬) 레코드를 추가합니다.
+**B. Cloudflare 프록시(주황 구름) + 공유기 포트포워딩**
+1. Cloudflare → SSL/TLS → Origin Server → **Create Certificate** (호스트 `ipsi.isjung.com`) → 인증서·키를 서버에 저장
+   (`/etc/ssl/cloudflare/ipsi.pem`, `/etc/ssl/cloudflare/ipsi.key`, 권한 600)
+2. 서버에서: `sudo TLS_CERT=/etc/ssl/cloudflare/ipsi.pem TLS_KEY=/etc/ssl/cloudflare/ipsi.key bash /opt/ipsi/admission/deploy/install.sh`
+3. Cloudflare → SSL/TLS → 암호화 모드 **Full (strict)**, DNS 에 `ipsi` 레코드(프록시 켬) 추가
+4. 공유기 443 포트가 이미 업무시스템 서버로 가고 있다면, 그 서버에서 `ipsi.isjung.com` 요청을 `https://192.168.0.7` 로 넘겨야 합니다.
+
+**공통 권장 설정 (Cloudflare → SSL/TLS → Edge Certificates)**: *Always Use HTTPS* 켬, *Minimum TLS Version* 1.2
 
 ### 3. 업데이트 · 데이터 갱신
 ```bash
