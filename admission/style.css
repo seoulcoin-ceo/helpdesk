@@ -318,3 +318,11 @@ textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(
 .bar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
 .bar i { display: block; width: 100%; background: var(--primary); border-radius: 4px 4px 0 0; min-height: 2px; }
 .bar small { font-size: .65rem; color: var(--muted); }
+/* 대시보드·내신 대학 */
+.dash-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.dash-grid .card { margin: 0; }
+.todo-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.todo-list .check { font-weight: 500; align-items: flex-start; }
+.dash-cta { background: linear-gradient(135deg, var(--primary-soft), var(--surface)); }
+.callout.ok { background: color-mix(in srgb, var(--ok) 14%, var(--surface)); margin-bottom: 16px; }
+@media (max-width: 820px) { .dash-grid { grid-template-columns: 1fr; } }

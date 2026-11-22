@@ -57,6 +57,9 @@
       case "chance": p = pageChance(q); break;
       case "major": p = pageMajor(parts[1]); break;
       case "careers": p = pageCareers(q); break;
+      case "my": p = pageMy(q); break;
+      case "fit": p = pageFit(q); break;
+      case "premium": p = pagePremium(); break;
       case "admin": p = pageAdmin(parts[1]); break;
       case "login": p = pageLogin(q); break;
       case "signup": p = pageSignup(); break;
@@ -104,7 +107,7 @@
       started = true;
     });
     var dots = points.map(function (p, i) {
-      var lbl = '<text class="xl" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + String(p.k).slice(-2) + "</text>";
+      var lbl = '<text class="xl" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(/^\d{4}$/.test(String(p.k)) ? String(p.k).slice(-2) : String(p.k)) + "</text>";
       if (p.v == null) return lbl;
       return lbl + '<circle class="pt" cx="' + x(i) + '" cy="' + y(p.v) + '" r="4"><title>' + p.k + "학년도 " + p.v + (opt.unit || "") + "</title></circle>" +
         (opt.labels !== false ? '<text class="vl" x="' + x(i) + '" y="' + (y(p.v) - 9) + '" text-anchor="middle">' + Number(p.v).toFixed(opt.digits == null ? 1 : opt.digits) + "</text>" : "");
@@ -1290,8 +1293,9 @@
   function navAccount() {
     var a = $("#navAccount");
     if (!a) return;
-    a.textContent = ME ? (ME.name || "내 계정") : "로그인";
-    a.setAttribute("href", ME ? "#/account" : "#/login");
+    a.textContent = ME ? (ME.role === "parent" ? "우리 아이" : "내 대시보드") : "로그인";
+    a.setAttribute("href", ME ? "#/my" : "#/login");
+    a.setAttribute("data-nav", ME ? "my" : "account");
     var g = $("#navAdmin");
     if (ME && ME.isStaff && !g) {
       g = document.createElement("a"); g.id = "navAdmin"; g.href = "#/admin"; g.setAttribute("data-nav", "admin"); g.textContent = "관리";
@@ -1322,7 +1326,7 @@
   }
 
   function pageLogin(q) {
-    var next = q.get("next") || "account";
+    var next = q.get("next") || "my";
     var msg = q.get("error");
     view.innerHTML = '<section class="section"><div class="card narrow"><h1>로그인</h1>' +
       (msg ? '<p class="form-error">' + esc(msg) + "</p>" : "") +
@@ -1360,7 +1364,7 @@
       if (f.password.value !== f.password2.value) { $("#sErr").textContent = "비밀번호가 서로 다릅니다."; return; }
       var b = consentValues(f); b.email = f.email.value; b.password = f.password.value;
       api("POST", "/auth/signup", b).then(function (u) { ME = u; navAccount(); return pullData(); })
-        .then(function () { location.hash = "#/account"; }).catch(function (er) { $("#sErr").textContent = er.message; });
+        .then(function () { location.hash = "#/my"; }).catch(function (er) { $("#sErr").textContent = er.message; });
     });
   }
 
@@ -1590,6 +1594,163 @@
       '<p class="muted small">이 방침은 초안입니다. 운영 전에 운영자·책임자 정보와 내용을 검토해 확정하세요.</p></div></section>';
   }
 
+  /* ---------- 우리 아이 대시보드 (고1·고2 학부모 관리 도구) ---------- */
+  // 학년·월별 할 일 (대략적인 학사 일정 기준. 학교마다 시험 시기는 조금씩 다름)
+  var TODO = {
+    "고1": { 3: ["3월 학력평가 응시 — 첫 전국 단위 위치 확인", "진로 희망 정리(학생부 진로활동의 시작)"], 4: ["1학기 중간고사 준비", "동아리 정하기 — 진로와 연결되면 좋음"], 5: ["중간고사 결과로 과목별 약점 점검", "수업 중 궁금한 점 기록 → 세특의 재료"],
+      6: ["6월 학력평가", "기말고사 준비"], 7: ["1학기 성적 확인 → ‘내 성적’에 입력", "여름방학 진로 탐색(학과·진로 메뉴)"], 8: ["2학기 계획, 독서·탐구 주제 정하기"], 9: ["9월 학력평가", "2학년 선택과목 안내 확인"], 10: ["2학기 중간고사", "선택과목 결정 — 희망 학과 권장 이수 과목 확인"],
+      11: ["11월 학력평가", "기말고사 준비"], 12: ["2학기 성적 확인·입력", "학생부(세특·창체) 내용 확인"], 1: ["1학년 총정리, 겨울방학 공부 계획"], 2: ["2학년 선택과목 최종 확인"] },
+    "고2": { 3: ["3월 학력평가", "진로를 구체화 — 희망 학과 2~3개"], 4: ["중간고사 — 2학년 성적이 대입에서 가장 비중이 큼"], 5: ["진로 관련 과목에서 탐구 활동(세특)"], 6: ["6월 학력평가", "기말고사"], 7: ["1학기 성적 입력, 목표 대학 3~5곳 공식 입결 확인(대학 찾기)"],
+      8: ["수능 영역별 약점 파악"], 9: ["9월 학력평가", "수시/정시 무게 중심 생각해 보기"], 10: ["2학기 중간고사", "3학년 선택과목 결정"], 11: ["11월 학력평가", "기말고사"], 12: ["2학기 성적 입력 — 내신 추이 확인", "내신으로 갈 수 있는 대학 확인"], 1: ["고3 대비 겨울방학 계획 — 수능 기초"], 2: ["학생부 1·2학년 내용 점검"] },
+    "고3": { 3: ["3월 학력평가 — 지원 가능 범위 첫 점검", "수시 후보 대학 10곳"], 4: ["중간고사 — 마지막 반영 학기", "대학별 수시 모집요강 확인"], 5: ["수능 최저 기준 맞출 영역 정하기"], 6: ["6월 모의평가(평가원) — 수시/정시 결정의 기준", "기말고사"],
+      7: ["1학기 성적 확정, 학생부 최종 점검", "수시 6곳 압축"], 8: ["자기 점검용 면접 준비, 원서 준비"], 9: ["9월 모의평가", "수시 원서접수"], 10: ["논술·면접 대비"], 11: ["대학수학능력시험", "가채점 → 수능 최저·정시 판단"], 12: ["수시 발표, 정시 지원 전략", "정시 원서접수(12월 말~1월 초)"], 1: ["정시 합격 발표 확인"], 2: ["추가합격·추가모집 확인"] },
+    "졸업생": { 3: ["3월 계획 — 재수 목표 대학 정하기"], 6: ["6월 모의평가로 위치 확인"], 9: ["9월 모의평가, 수시 원서(졸업생 지원 가능 전형 확인)"], 11: ["수능, 가채점"], 12: ["정시 지원 전략"], 2: ["추가모집 확인"] },
+    "검정고시": { 4: ["검정고시(4월 시행) 응시 — 점수가 높을수록 유리한 대학이 많음"], 8: ["검정고시(8월 시행)", "수시 지원 가능 대학·비교내신 방식 확인"], 9: ["수시 원서접수"], 11: ["수능"], 12: ["정시 지원 전략"] }
+  };
+  function semAvg(rows, system) {
+    var max = system === "5" ? 5 : 9, out = [];
+    SEMS.forEach(function (sm) {
+      var sum = 0, u = 0;
+      rows.forEach(function (r) { if (r.sem !== sm) return; var g = num(r.grade), w = num(r.unit); if (g >= 1 && g <= max && w > 0) { sum += g * w; u += w; } });
+      out.push({ k: sm, v: u ? Math.round(sum / u * 100) / 100 : null });
+    });
+    return out;
+  }
+  function allAvg(rows, system) {
+    var max = system === "5" ? 5 : 9, sum = 0, u = 0;
+    rows.forEach(function (r) { var g = num(r.grade), w = num(r.unit); if (g >= 1 && g <= max && w > 0) { sum += g * w; u += w; } });
+    return u ? Math.round(sum / u * 100) / 100 : null;
+  }
+  function dashboardHtml(d, editable) {
+    var p = d.profile || {}, grade = p.grade || "고1", m = new Date().getMonth() + 1;
+    var gpa = d.gpa || { system: "9", rows: [] }, sems = semAvg(gpa.rows || [], gpa.system).filter(function (x) { return x.v != null; }), avg = allAvg(gpa.rows || [], gpa.system);
+    var ex = d.exams || [];
+    var exPts = ex.map(function (e) {
+      var gs = ["kor", "math", "eng", "t1"].map(function (k) { return gradeOf(e, k); }).filter(function (v) { return v; });
+      return { k: (e.year ? String(e.year).slice(2) + " " : "") + e.kind.replace(/교육청 학력평가 |평가원 모의평가 /, "").replace("수능 성적표(실채점)", "수능"), v: gs.length ? Math.round(gs.reduce(function (a, b) { return a + b; }, 0) / gs.length * 10) / 10 : null };
+    });
+    var todos = (TODO[grade] || {})[m] || [];
+    var done = d.todoDone || {};
+    var rec = d.record || {}, cs = (d.counsel || []).filter(function (c) { return c.next && c.next >= new Date().toISOString().slice(0, 10); }).sort(function (a, b) { return a.next < b.next ? -1 : 1; })[0];
+    return '<div class="dash-grid">' +
+      '<div class="card dash-profile"><h2>프로필</h2>' + (editable ?
+        '<div class="toolbar"><label>학년<select id="pfGrade">' + ["고1", "고2", "고3", "졸업생", "검정고시"].map(function (g) { return "<option" + (g === grade ? " selected" : "") + ">" + g + "</option>"; }).join("") + "</select></label>" +
+        '<label>목표 학과<input id="pfDept" value="' + esc((rec.hopeDept) || "") + '" placeholder="예: 간호학과" /></label></div>' :
+        "<p><b>" + esc(grade) + "</b>" + (rec.hopeDept ? " · 목표 " + esc(rec.hopeDept) : "") + "</p>") +
+      '<div class="kpis">' + kpi("내신 평균", avg ? avg.toFixed(2) + "등급" : "-") + kpi("등급제", (gpa.system || "9") + "등급") + kpi("관심 대학", (d.fav || []).length + "곳") + "</div></div>" +
+      '<div class="card"><h2>' + m + "월 할 일 <small class=\"muted\">(" + esc(grade) + ")</small></h2>" + (todos.length ? '<ul class="todo-list">' + todos.map(function (t, i) {
+        var key = grade + "-" + m + "-" + i;
+        return '<li><label class="check"><input type="checkbox" data-todo="' + key + '"' + (done[key] ? " checked" : "") + (editable ? "" : " disabled") + " /> " + esc(t) + "</label></li>";
+      }).join("") + "</ul>" : '<p class="muted">이번 달 특별한 일정이 없습니다.</p>') + '<p class="muted small">시험 시기는 학교마다 조금씩 다릅니다.</p></div>' +
+      '<div class="card"><h2>학기별 내신 추이</h2>' + (sems.some(function (x) { return x.v; }) ? lineChart(sems, { label: "학기별 평균 등급", unit: "등급", h: 170 }) + '<p class="muted small">숫자가 작을수록 좋은 등급입니다.</p>' :
+        '<p class="muted">‘내 성적 → 학생부 내신’에 과목을 입력하면 학기별 추이가 나옵니다.</p>') + "</div>" +
+      '<div class="card"><h2>모의고사 추이 <small class="muted">(국·수·영·탐 평균 등급)</small></h2>' + (exPts.some(function (x) { return x.v; }) ? lineChart(exPts, { label: "모의고사 평균 등급", unit: "등급", h: 170 }) :
+        '<p class="muted">‘내 성적 → 모의고사·수능’에 성적을 입력하세요.</p>') + "</div>" +
+      '<div class="card"><h2>학생부 점검</h2><ul class="plain">' +
+      "<li>희망 학과: " + (rec.hopeDept ? "<b>" + esc(rec.hopeDept) + "</b>" : '<span class="muted">미입력</span>') + "</li>" +
+      "<li>세특 입력: " + ((rec.seteuk || []).length) + "과목</li>" +
+      "<li>다음 상담: " + (cs ? "<b>" + esc(cs.next) + "</b> " + esc(cs.who) : '<span class="muted">없음</span>') + "</li></ul>" +
+      (editable ? '<a class="btn btn-ghost" href="#/calc">성적·학생부·상담 기록하기</a>' : "") + "</div>" +
+      '<div class="card dash-cta"><h2>내신으로 갈 수 있는 대학</h2><p>지금 내신으로 대학별 교과전형 합격선과 비교해 <b>안정·적정·소신</b>으로 나눠 보여 줍니다.</p>' +
+      '<a class="btn btn-primary" href="#/fit">' + (avg ? "내신 " + avg.toFixed(2) + "등급으로 찾아보기" : "찾아보기") + "</a></div>" +
+      "</div>";
+  }
+  function pageMy(q) {
+    return refreshMe().then(function () {
+      if (!ME) return needLogin("my");
+      if (ME.needConsent) return pageConsent();
+      var who = q.get("child") || "";
+      var render = function (data, editable, label, kids) {
+        view.innerHTML = '<section class="section"><div class="section-head"><h1>' + esc(label) + "</h1>" +
+          "<p>고1부터 고3까지 내신·모의고사 추이와 학년별로 그때그때 해야 할 일을 한곳에서 관리하세요.</p></div>" +
+          (kids && kids.length ? '<div class="chips field-tabs"><a class="chip' + (who ? "" : " is-active") + '" href="#/my">직접 입력한 기록</a>' +
+            kids.map(function (k) { return '<a class="chip' + (String(k.uid) === who ? " is-active" : "") + '" href="#/my?child=' + k.uid + '">' + esc(k.name || k.email || "자녀") + "</a>"; }).join("") + "</div>" : "") +
+          (ME.role === "parent" && !(kids && kids.length) ? '<div class="callout">자녀가 자기 계정에서 기록하고 있다면 <a href="#/account">내 계정 → 자녀 계정 연결</a>로 연결하세요. 연결하지 않아도 이 화면에서 직접 입력해 관리할 수 있습니다.</div>' : "") +
+          dashboardHtml(data, editable) + '<p class="muted small" style="margin-top:12px"><a href="#/account">내 계정 설정 · 자녀 연결 · 결과 제보 · 로그아웃</a></p></section>';
+        if (!editable) return;
+        var s = load();
+        $("#pfGrade").addEventListener("change", function () { s = load(); s.profile = s.profile || {}; s.profile.grade = this.value; if (this.value === "검정고시") s.who = "검정고시"; save(s); pageMy(q); });
+        $("#pfDept").addEventListener("change", function () { s = load(); s.record = s.record || { hope: "", hopeDept: "", att: {}, cha: {}, seteuk: [], haeng: {} }; s.record.hopeDept = this.value.trim(); save(s); });
+        $all("[data-todo]").forEach(function (c) {
+          c.addEventListener("change", function () { s = load(); s.todoDone = s.todoDone || {}; s.todoDone[c.getAttribute("data-todo")] = c.checked; save(s); });
+        });
+      };
+      var kidsP = ME.role === "parent" ? api("GET", "/link").catch(function () { return []; }) : Promise.resolve([]);
+      return kidsP.then(function (kids) {
+        if (who) return api("GET", "/children/" + encodeURIComponent(who)).then(function (c) { render(c.data || {}, false, (c.name || "자녀") + " 대시보드", kids); });
+        render(load(), true, ME.role === "parent" ? "우리 아이 대시보드" : "내 대시보드", kids);
+      });
+    });
+  }
+
+  /* ---------- 내신으로 갈 수 있는 대학 ---------- */
+  function pageFit(q) {
+    return refreshMe().then(function () {
+      var s = load(), gpa = s.gpa || { system: "9", rows: [] }, avg = allAvg(gpa.rows || [], gpa.system);
+      var regions = uniq(IDX.univ.map(function (u) { return u.region; })).sort();
+      view.innerHTML = '<section class="section"><div class="section-head"><h1>내신으로 갈 수 있는 대학</h1>' +
+        "<p>내 내신 평균등급을 대학이 공식 발표한 <b>교과전형 합격선</b>(70% 컷 등 대학이 공개한 기준)과 비교해 <b>안정·적정·소신</b>으로 나눠 보여 줍니다.</p></div>" +
+        (ME && ME.premiumFree ? '<div class="callout ok">지금은 <b>무료 공개 기간</b>입니다. 회원이면 모든 결과를 볼 수 있습니다.</div>' : "") +
+        '<div class="card"><form id="fitForm" class="toolbar">' +
+        '<label>내신 평균등급<input name="grade" type="number" step="0.01" min="1" max="9" required value="' + (avg || "") + '" /></label>' +
+        '<label>등급제<select name="scale"><option value="9"' + (gpa.system !== "5" ? " selected" : "") + '>9등급제</option><option value="5"' + (gpa.system === "5" ? " selected" : "") + ">5등급제(2025 고1~)</option></select></label>" +
+        '<label>전형<select name="track"><option value="교과">학생부교과</option><option value="종합">학생부종합(참고)</option><option value="">전체</option></select></label>' +
+        '<label>지역<select name="region"><option value="">전체</option>' + regions.map(function (r) { return "<option>" + esc(r) + "</option>"; }).join("") + "</select></label>" +
+        '<button class="btn btn-primary" type="submit">찾기</button></form>' +
+        (avg ? '<p class="muted small">‘내 성적’에 입력한 내신 평균(' + avg.toFixed(2) + "등급)을 불러왔습니다.</p>" : '<p class="muted small"><a href="#/calc">내 성적</a>에 내신을 입력해 두면 자동으로 채워집니다.</p>') +
+        '</div><div id="fitOut"></div>' +
+        '<div class="card"><h2>꼭 알아 두세요</h2><ul class="plain small">' +
+        "<li><b>안정</b>: 내 등급이 합격선보다 0.3등급 이상 좋음 · <b>적정</b>: 합격선 근처(±0.2~0.3) · <b>소신</b>: 합격선보다 0.6등급 이내로 낮음.</li>" +
+        "<li>합격선은 대학이 공개한 지난 입시결과(최종등록자 70% 컷 등)이며, 대학마다 기준(70%·80%·평균)이 다릅니다. 표마다 기준과 원문 링크를 달았습니다.</li>" +
+        "<li>대학별 반영 교과·학년 비율이 달라 실제 환산 등급은 내 전과목 평균과 다를 수 있습니다. 수능 최저 기준도 함께 확인하세요.</li>" +
+        "<li>5등급제 성적은 등급 비율로 9등급제에 맞춰 바꾼 <b>참고용 환산</b>입니다. 5등급제 입시결과가 나오면(2028학년도~) 그대로 비교합니다.</li>" +
+        "<li>현재 공식 입결을 확보한 대학만 나옵니다. 대학은 계속 추가됩니다. 합격선이 없는 대학은 <a href=\"#/chance\">4년제 기회 찾기</a>(미달 예상)도 함께 보세요.</li></ul></div></section>";
+      $("#fitForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var f = this, out = $("#fitOut");
+        if (!ME) { out.innerHTML = '<div class="card narrow"><h2>회원 전용</h2><p>로그인하면 결과를 볼 수 있습니다. 가입은 무료입니다.</p><a class="btn btn-primary" href="#/signup">무료 회원가입</a> <a class="btn btn-ghost" href="#/login?next=fit">로그인</a></div>'; return; }
+        out.innerHTML = '<p class="muted">찾는 중…</p>';
+        var qs = new URLSearchParams({ grade: f.grade.value, scale: f.scale.value, track: f.track.value, region: f.region.value });
+        api("GET", "/premium/match?" + qs).then(function (r) {
+          var c = r.counts;
+          var head = '<div class="kpis">' + kpi("적정", c["적정"] + "곳") + kpi("소신", c["소신"] + "곳") + kpi("안정", c["안정"] + "곳") +
+            kpi("비교 기준", (r.converted ? "환산 " : "") + r.g9.toFixed(2) + "등급(9등급제)") + kpi("합격선 보유", r.univ + "개 대학") + "</div>";
+          if (!r.premium) {
+            out.innerHTML = head + '<div class="card"><h2>미리보기</h2><p>전체 대학·학과 목록은 이용권 회원에게 제공됩니다.</p><a class="btn btn-primary" href="#/premium">이용권 안내</a></div>';
+            return;
+          }
+          var cats = ["적정", "소신", "안정"];
+          out.innerHTML = head + cats.map(function (cat) {
+            var rows = r.rows.filter(function (x) { return x.cat === cat; });
+            if (!rows.length) return "";
+            return '<div class="card"><h2>' + cat + " <small class=\"muted\">" + rows.length + "곳</small></h2>" +
+              '<div class="table-wrap"><table class="data-table"><thead><tr><th>대학</th><th>학과(모집단위)</th><th>전형</th><th>지역</th><th class="num">합격선</th><th class="num">내 등급과 차이</th><th>기준·원문</th></tr></thead><tbody>' +
+              rows.slice(0, 300).map(function (x) {
+                return '<tr><td><a href="#/univ/' + esc(x.u) + '">' + esc(x.un) + "</a></td><td>" + esc(x.d) + "</td><td>" + esc(x.j || x.tr) + "</td><td>" + esc(x.rg) +
+                  '</td><td class="num"><b>' + x.c.toFixed(2) + '</b> <small class="muted">' + x.y + '</small></td><td class="num">' + (x.diff >= 0 ? "+" : "") + x.diff.toFixed(2) +
+                  '</td><td class="small">' + esc(x.ct) + ' · <a href="' + esc(x.src) + (x.pg ? "#page=" + x.pg : "") + '" target="_blank" rel="noopener">원문</a></td></tr>';
+              }).join("") + "</tbody></table></div></div>";
+          }).join("") || '<p class="empty">조건에 맞는 학과가 없습니다. 지역·전형을 넓혀 보세요.</p>';
+        }).catch(function (er) { out.innerHTML = '<p class="form-error">' + esc(er.message) + "</p>"; });
+      });
+      if (avg && ME) $("#fitForm").dispatchEvent(new Event("submit", { cancelable: true }));
+    });
+  }
+
+  /* ---------- 이용권 안내 ---------- */
+  function pagePremium() {
+    return refreshMe().then(function () {
+      view.innerHTML = '<section class="section"><div class="section-head"><h1>이용권 안내</h1><p>입시나침반의 기본 기능은 모두 무료입니다.</p></div>' +
+        (ME && ME.premiumFree ? '<div class="callout ok"><b>지금은 무료 공개 기간</b>입니다. 회원이면 ‘내신으로 갈 수 있는 대학’을 포함한 모든 기능을 무료로 쓸 수 있습니다.</div>' : "") +
+        '<div class="grid-2"><div class="card"><h2>무료 회원</h2><ul class="plain">' +
+        "<li>우리 아이 대시보드 (고1~고3 관리)</li><li>내신·모의고사·수능·검정고시 성적 기록, 수능 최저 확인</li><li>학생부·상담 기록, 학부모-자녀 연결</li>" +
+        "<li>대학·학과 10년 통계, 4년제 기회 찾기(미달 예상)</li><li>입시 전략·가이드, 학과·진로</li></ul></div>" +
+        '<div class="card"><h2>이용권</h2><ul class="plain"><li><b>내신으로 갈 수 있는 대학</b> — 대학별 공식 합격선과 비교한 안정·적정·소신 전체 목록과 원문 근거</li>' +
+        "<li>앞으로 추가: 정시 환산점수 비교, 합격 예측</li></ul>" +
+        (ME && ME.premiumUntil ? "<p>이용 기간: <b>" + new Date(ME.premiumUntil * 1000).toLocaleDateString("ko-KR") + "</b>까지</p>" : '<p class="muted small">결제 기능은 준비 중입니다.</p>') + "</div></div></section>";
+    });
+  }
+
   /* ---------- 관리 (관리자·운영자) ---------- */
   function pageAdmin(sub) {
     return refreshMe().then(function () {
@@ -1609,7 +1770,7 @@
         box.innerHTML = '<div class="kpis">' + kpi("회원", fmtInt(x.users) + "명") + kpi("학생", fmtInt(x.students)) + kpi("학부모", fmtInt(x.parents)) +
           kpi("최근 7일 가입", fmtInt(x.new7)) + kpi("최근 30일 가입", fmtInt(x.new30)) + kpi("최근 7일 로그인", fmtInt(x.active7)) + "</div>" +
           '<div class="kpis wide">' + kpi("성적 저장 회원", fmtInt(x.withData)) + kpi("학부모-자녀 연결", fmtInt(x.links)) + kpi("제보 동의 회원", fmtInt(x.reportConsent)) +
-          kpi("결과 제보", fmtInt(x.reports) + "건") + kpi("카카오", fmtInt(x.social.kakao || 0)) + kpi("네이버", fmtInt(x.social.naver || 0)) + kpi("기출 파일", fmtInt(x.gichulFiles)) + "</div>" +
+          kpi("결과 제보", fmtInt(x.reports) + "건") + kpi("카카오", fmtInt(x.social.kakao || 0)) + kpi("네이버", fmtInt(x.social.naver || 0)) + kpi("기출 파일", fmtInt(x.gichulFiles)) + kpi("이용권 회원", fmtInt(x.premium)) + "</div>" +
           '<div class="card" style="margin-top:16px"><h2>최근 30일 가입</h2>' + (x.daily.length ? '<div class="bars">' + x.daily.map(function (d) {
             return '<div class="bar" title="' + esc(d.d) + " " + d.n + '명"><i style="height:' + Math.round(d.n / max * 100) + '%"></i><small>' + esc(d.d.slice(5)) + "</small></div>";
           }).join("") + "</div>" : '<p class="muted">가입 없음</p>') + "</div>";
@@ -1619,20 +1780,27 @@
           return api("GET", "/admin/users?q=" + encodeURIComponent(q || "")).then(function (list) {
             var date = function (t) { return t ? new Date(t * 1000).toLocaleDateString("ko-KR") : "-"; };
             box.innerHTML = '<div class="card"><div class="toolbar"><label>이메일·이름 검색<input type="search" id="uQ" value="' + esc(q || "") + '" /></label></div>' +
-              '<div class="table-wrap"><table class="data-table"><thead><tr><th>이메일</th><th>이름</th><th>구분</th><th>로그인</th><th>가입</th><th>최근 로그인</th><th class="num">제보</th><th>권한</th><th></th></tr></thead><tbody>' +
+              '<div class="table-wrap"><table class="data-table"><thead><tr><th>이메일</th><th>이름</th><th>구분</th><th>로그인</th><th>가입</th><th>최근 로그인</th><th class="num">제보</th><th>권한</th><th>이용권</th><th></th></tr></thead><tbody>' +
               list.map(function (u) {
                 var role = u.admin ? '<span class="tag tag-c">최초 관리자</span>' : ME.isAdmin && u.id !== ME.id ?
                   '<select data-staff="' + u.id + '">' + [["", "일반"], ["operator", "운영자"], ["admin", "관리자"]].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === u.staff ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select>" :
                   esc({ "": "일반", operator: "운영자", admin: "관리자" }[u.staff] || "일반");
                 return "<tr><td>" + esc(u.email || "(간편 로그인)") + "</td><td>" + esc(u.name) + "</td><td>" + (u.role === "parent" ? "학부모" : "학생") + (u.consent_at ? "" : ' <span class="tag">동의 전</span>') +
                   "</td><td>" + esc((u.providers || "이메일").replace("kakao", "카카오").replace("naver", "네이버")) + "</td><td>" + date(u.created) + "</td><td>" + date(u.last_login) +
-                  '</td><td class="num">' + u.reports + "</td><td>" + role + "</td><td>" + (ME.isAdmin && u.id !== ME.id && !u.admin ? '<button class="icon-btn" data-udel="' + u.id + '" title="강제 탈퇴">×</button>' : "") + "</td></tr>";
+                  '</td><td class="num">' + u.reports + "</td><td>" + role + "</td><td>" + (u.premium_until && u.premium_until * 1000 > Date.now() ? '<span class="tag tag-c">' + new Date(u.premium_until * 1000).toLocaleDateString("ko-KR") + "까지</span> " : "") +
+                  (ME.isAdmin ? '<select data-prem="' + u.id + '"><option value="">이용권…</option><option value="30">+30일</option><option value="365">+1년</option><option value="0">해제</option></select>' : "") + "</td><td>" + (ME.isAdmin && u.id !== ME.id && !u.admin ? '<button class="icon-btn" data-udel="' + u.id + '" title="강제 탈퇴">×</button>' : "") + "</td></tr>";
               }).join("") + '</tbody></table></div><p class="muted small">최대 500명 표시. 권한 변경·강제 탈퇴는 관리자만 할 수 있습니다. 최초 관리자는 서버 설정(ADMIN_EMAILS)으로 정합니다.</p></div>';
             var t;
             $("#uQ").addEventListener("input", function () { var v = this.value.trim(); clearTimeout(t); t = setTimeout(function () { load(v); }, 300); });
             $all("[data-staff]").forEach(function (sel) {
               sel.addEventListener("change", function () {
                 api("PUT", "/admin/users/" + sel.getAttribute("data-staff"), { staff: sel.value }).catch(function (e) { alert(e.message); load(q); });
+              });
+            });
+            $all("[data-prem]").forEach(function (sel) {
+              sel.addEventListener("change", function () {
+                if (sel.value === "") return;
+                api("PUT", "/admin/users/" + sel.getAttribute("data-prem") + "/premium", { days: +sel.value }).then(function () { load(q); }).catch(function (e) { alert(e.message); });
               });
             });
             $all("[data-udel]").forEach(function (b) {

@@ -63,6 +63,7 @@ NAVER_CLIENT_SECRET=
 ENV
   chmod 640 /etc/ipsi/api.env; chown root:www-data /etc/ipsi/api.env
 fi
+grep -q '^PREMIUM_FREE=' /etc/ipsi/api.env || printf '\n# 유료 기능(내신으로 갈 수 있는 대학) 무료 공개: 1=무료(로그인 회원 전체), 0=유료 회원만\nPREMIUM_FREE=1\n' >> /etc/ipsi/api.env
 grep -q '^ADMIN_EMAILS=' /etc/ipsi/api.env || printf '\n# 관리자(기출 정리함) 이메일, 쉼표로 여러 개\nADMIN_EMAILS=\nGICHUL_DIR=/mnt/backup/ipsi-gichul\n' >> /etc/ipsi/api.env
 if [ -d /mnt/backup ]; then
   mkdir -p /mnt/backup/ipsi-gichul && chown -R www-data:www-data /mnt/backup/ipsi-gichul && chmod 750 /mnt/backup/ipsi-gichul

@@ -87,6 +87,8 @@ with db() as _c:
         _c.execute("ALTER TABLE users ADD COLUMN staff TEXT NOT NULL DEFAULT ''")
     if "last_login" not in _cols:
         _c.execute("ALTER TABLE users ADD COLUMN last_login INTEGER")
+    if "premium_until" not in _cols:  # 유료 이용 기한 (unix time)
+        _c.execute("ALTER TABLE users ADD COLUMN premium_until INTEGER")
 
 
 def h(token):
@@ -161,6 +163,16 @@ def is_admin(u):
     return (bool(u["email"]) and u["email"].lower() in ADMINS) or u["staff"] == "admin"
 
 
+PREMIUM_FREE = os.environ.get("PREMIUM_FREE", "1") == "1"   # 1: 유료 기능을 로그인 회원 모두에게 무료 공개 (회원 모으는 기간)
+
+
+def is_premium(u):
+    """유료 기능 이용 가능: 무료 공개 기간이면 약관 동의한 모든 회원, 아니면 이용 기한 안이거나 운영진"""
+    if PREMIUM_FREE and u["consent_at"]:
+        return True
+    return bool((u["premium_until"] or 0) > now()) or is_staff(u)
+
+
 def is_staff(u):
     """운영자 이상"""
     return is_admin(u) or (bool(u["consent_at"]) and u["staff"] == "operator")
@@ -170,7 +182,8 @@ def public(u):
     with db() as c:
         prov = [r["provider"] for r in c.execute("SELECT provider FROM identities WHERE user_id=?", (u["id"],))]
     return {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"], "providers": prov,
-            "needConsent": not u["consent_at"], "reportConsent": bool(u["report_consent"]), "isAdmin": is_admin(u), "isStaff": is_staff(u)}
+            "needConsent": not u["consent_at"], "reportConsent": bool(u["report_consent"]), "isAdmin": is_admin(u), "isStaff": is_staff(u),
+            "premiumUntil": u["premium_until"] if (u["premium_until"] or 0) > now() else None, "premium": is_premium(u), "premiumFree": PREMIUM_FREE}
 
 
 def consent_ok(b):
@@ -669,6 +682,7 @@ def a_stats(request: Request):
             "reports": one("SELECT COUNT(*) FROM reports"),
             "social": {r[0]: r[1] for r in c.execute("SELECT provider, COUNT(*) FROM identities GROUP BY provider")},
             "gichulFiles": one("SELECT COUNT(*) FROM gichul_files"),
+            "premium": one("SELECT COUNT(*) FROM users WHERE premium_until>?", t),
             "daily": [dict(r) for r in c.execute(
                 "SELECT date(created,'unixepoch','+9 hours') d, COUNT(*) n FROM users WHERE created>? GROUP BY d ORDER BY d", (t - 30 * 86400,))],
         }
@@ -680,7 +694,7 @@ def a_users(request: Request, q: str = ""):
     """회원 목록 (성적 등 개인 기록은 보여 주지 않는다)"""
     staff_of(request)
     with db() as c:
-        rows = c.execute("SELECT u.id,u.email,u.name,u.role,u.staff,u.created,u.last_login,u.consent_at,u.report_consent,"
+        rows = c.execute("SELECT u.id,u.email,u.name,u.role,u.staff,u.created,u.last_login,u.consent_at,u.report_consent,u.premium_until,"
                          "(SELECT group_concat(provider) FROM identities i WHERE i.user_id=u.id) providers,"
                          "(SELECT COUNT(*) FROM reports r WHERE r.user_id=u.id) reports "
                          "FROM users u WHERE (?='' OR u.email LIKE ? OR u.name LIKE ?) ORDER BY u.id DESC LIMIT 500",
@@ -729,6 +743,104 @@ def a_reports(request: Request):
                          "(r.snapshot IS NOT NULL) has_score FROM reports r JOIN users u ON u.id=r.user_id "
                          "WHERE u.report_consent=1 ORDER BY r.id DESC LIMIT 2000").fetchall()
     return [dict(r) for r in rows]
+
+
+# ---------- 유료: 내신으로 갈 수 있는 대학 ----------
+CUTS_FN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cuts.json")
+_cuts = {"mtime": 0, "rows": [], "built": ""}
+CUM9 = [0, 4, 11, 23, 40, 60, 77, 89, 96, 100]
+CUM5 = [0, 10, 34, 66, 90, 100]
+
+
+def cuts():
+    try:
+        m = os.path.getmtime(CUTS_FN)
+    except OSError:
+        return _cuts
+    if m != _cuts["mtime"]:
+        j = json.load(open(CUTS_FN, encoding="utf-8"))
+        latest = {}
+        for r in j["rows"]:   # 같은 대학·학과·전형은 최신 학년도만
+            k = (r["u"], r["d"], r["j"], r["tr"])
+            if k not in latest or r["y"] > latest[k]["y"]:
+                latest[k] = r
+        _cuts.update(mtime=m, rows=list(latest.values()), built=j.get("built", ""))
+    return _cuts
+
+
+def grade_to_pct(g, cum):
+    """평균 등급 → 상위 누적 비율(%) (등급 안에서는 선형). 참고용 환산"""
+    n = len(cum) - 1
+    g = min(max(g, 1.0), float(n))
+    k = int(g) if g < n else n - 1
+    frac = g - k
+    lo, hi = cum[k - 1] if k >= 1 else 0, cum[k]
+    mid = (lo + hi) / 2
+    nxt = (cum[k] + cum[k + 1]) / 2 if k < n else 100
+    return mid + frac * (nxt - mid)
+
+
+def pct_to_grade(p, cum):
+    n = len(cum) - 1
+    mids = [(cum[k - 1] + cum[k]) / 2 for k in range(1, n + 1)]
+    if p <= mids[0]:
+        return 1.0
+    for k in range(1, n):
+        if p <= mids[k]:
+            return k + (p - mids[k - 1]) / (mids[k] - mids[k - 1])
+    return float(n)
+
+
+@app.get("/api/premium/match")
+def p_match(request: Request, grade: float, scale: int = 9, track: str = "교과", region: str = ""):
+    u = user_of(request)
+    if scale not in (5, 9) or not 1 <= grade <= scale:
+        err(400, "등급을 확인하세요.")
+    g9 = grade if scale == 9 else round(pct_to_grade(grade_to_pct(grade, CUM5), CUM9), 2)
+    C = cuts()
+    res = []
+    for r in C["rows"]:
+        if track and r["tr"] != track:
+            continue
+        if region and r["rg"] != region:
+            continue
+        diff = r["c"] - g9          # + 면 내 등급이 합격선보다 좋음
+        if diff >= 0.3:
+            cat = "안정"
+        elif diff >= -0.2:
+            cat = "적정"
+        elif diff >= -0.6:
+            cat = "소신"
+        else:
+            continue
+        res.append(dict(r, cat=cat, diff=round(diff, 2)))
+    uniq_, seen_ = [], set()
+    for r in res:   # 같은 대학·학과·전형·합격선 중복 제거
+        k = (r["u"], r["d"], r["tr"], r["c"])
+        if k not in seen_:
+            seen_.add(k); uniq_.append(r)
+    res = uniq_
+    order = {"적정": 0, "소신": 1, "안정": 2}
+    res.sort(key=lambda r: (order[r["cat"]], abs(r["diff"]) if r["cat"] == "적정" else (-r["diff"] if r["cat"] == "소신" else r["diff"])))
+    counts = {k: sum(1 for r in res if r["cat"] == k) for k in ("안정", "적정", "소신")}
+    meta = {"g9": g9, "converted": scale == 5, "built": C["built"], "univ": len({r["u"] for r in C["rows"]}), "total": len(C["rows"]), "counts": counts}
+    if not is_premium(u):
+        return dict(meta, premium=False, rows=[{k: v for k, v in r.items() if k in ("cat", "tr", "y", "rg")} for r in res[:3]])
+    return dict(meta, premium=True, rows=res[:1500])
+
+
+@app.put("/api/admin/users/{uid}/premium")
+def a_premium(uid: int, request: Request, b: dict = Body(...)):
+    """관리자가 유료 기간을 준다 (days=0 이면 해제). 결제 연동 전 임시 운영용"""
+    admin_of(request)
+    days = int(b.get("days", 0))
+    with db() as c:
+        cur = c.execute("SELECT premium_until FROM users WHERE id=?", (uid,)).fetchone()
+        if not cur:
+            err(404, "회원이 없습니다.")
+        base = max(cur["premium_until"] or 0, now())
+        c.execute("UPDATE users SET premium_until=? WHERE id=?", (base + days * 86400 if days > 0 else None, uid))
+    return {"ok": True}
 
 @app.get("/api/health")
 def health():
