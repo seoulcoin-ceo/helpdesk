@@ -13,7 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")
 DATA = os.path.join(ROOT, "data")
 OUT = os.path.join(ROOT, "u")
-SITE = os.environ.get("SITE_URL", "https://isjung.com").rstrip("/")
+SITE = os.environ.get("SITE_URL", "https://ipsi.isjung.com").rstrip("/")
 DOC_KINDS = [("susiResult", "수시 입시결과"), ("jungsiResult", "정시 입시결과"), ("susiGuide", "수시 모집요강"),
              ("jungsiGuide", "정시 모집요강"), ("plan", "전형 기본계획")]
 

@@ -1,4 +1,4 @@
-# 입시나침반 (isjung.com)
+# 입시나침반 (ipsi.isjung.com)
 
 전국 대학 입시 정보를 **정부·공공기관 공식 공시 데이터만으로** 보여주는 사이트입니다.
 추정 합격선이나 임의 가공 수치는 쓰지 않고, 모든 화면에 출처를 표시합니다.
@@ -39,57 +39,40 @@ admission/
 └── deploy/                         우분투 서버 설치 스크립트, nginx 설정
 ```
 
-## 우분투 서버에 설치 (isjung.com)
+## 우분투 서버에 설치 — ipsi.isjung.com (사내 서버 192.168.0.7)
 
-### 1. 도메인 연결 (도메인 구입처 관리화면)
-| 호스트 | 타입 | 값 |
-|---|---|---|
-| `@` (isjung.com) | A | 서버 공인 IP |
-| `www` | A | 서버 공인 IP |
+입시 사이트는 **ipsi.isjung.com** 으로 엽니다. 기존 **isjung.com(서울전자 업무시스템)은 건드리지 않습니다.**
+isjung.com 은 Cloudflare 를 거치므로 HTTPS 는 Cloudflare 가 처리하고, 서버는 사내망에서 80 포트만 엽니다.
 
-`ping isjung.com` 결과가 서버 IP 로 나오면 다음 단계로 진행하세요. (반영까지 수 분~수 시간)
-
-### 2. 서버에서 설치
-**방법 A — 압축 파일(isjung-site.zip)로 설치** (GitHub 연결 전)
+### 1. 서버(192.168.0.7)에서 설치
 ```bash
-# 내 PC에서 서버로 업로드
-scp isjung-site.zip 사용자@서버IP:/tmp/
-# 서버에서
-sudo apt-get install -y unzip
-sudo mkdir -p /opt/isjung && sudo unzip -o /tmp/isjung-site.zip -d /opt/isjung
-sudo EMAIL=본인이메일 bash /opt/isjung/admission/deploy/install.sh
-```
-
-**방법 B — GitHub에서 받아 설치**
-```bash
-# 우분투 버전 확인 (Ubuntu 22.04 / 24.04 권장)
-cat /etc/os-release
-
+cat /etc/os-release            # Ubuntu 인지 확인
 sudo apt-get update && sudo apt-get install -y git
-sudo git clone https://github.com/seoulcoin-ceo/helpdesk.git /opt/isjung
-cd /opt/isjung && sudo git checkout claude/university-admission-info-site-eyllo8
-
-sudo EMAIL=본인이메일 bash admission/deploy/install.sh
+sudo git clone -b claude/university-admission-info-site-eyllo8 https://github.com/seoulcoin-ceo/helpdesk.git /opt/ipsi
+sudo bash /opt/ipsi/admission/deploy/install.sh
 ```
-설치 스크립트가 하는 일:
-1. nginx, certbot(무료 HTTPS 인증서) 설치
-2. 웹 파일을 `/var/www/isjung.com` 에 배포 (pipeline·deploy 폴더는 외부 공개 안 함)
-3. nginx 설정 (gzip 압축, 캐시, 보안 헤더, www → 루트 도메인 이동)
-4. HTTPS 인증서 발급 및 자동 갱신
-5. 매월 1일 새벽 공시 데이터 자동 갱신 등록 (`/etc/cron.d/isjung-data`, 로그 `/var/log/isjung-data.log`)
+확인 (같은 사내망 PC 에서): `curl -H "Host: ipsi.isjung.com" http://192.168.0.7/` → HTML 이 나오면 정상.
 
-방화벽(AWS 보안그룹, 클라우드 방화벽 등)에서 **80, 443 포트**를 열어야 합니다.
+### 2. Cloudflare 에서 주소 연결
+isjung.com 이 어떻게 연결돼 있는지에 따라 하나를 고르세요.
 
-### 3. 코드 업데이트 반영
+**A. Cloudflare 터널(cloudflared)을 쓰는 경우 — 사내 서버라면 대부분 이 방식**
+1. Cloudflare 대시보드 → Zero Trust → Networks → Tunnels → isjung.com 에 쓰는 터널 선택 → *Public Hostname* → **Add a public hostname**
+2. Subdomain `ipsi`, Domain `isjung.com`, Service Type `HTTP`, URL `192.168.0.7:80` → 저장
+3. 1~2분 뒤 https://ipsi.isjung.com 접속
+
+**B. 공유기 포트포워딩 + DNS(A 레코드)를 쓰는 경우**
+80/443 포트가 이미 업무시스템 서버(예: 192.168.0.10)로 가고 있으므로, 그 서버의 웹서버(nginx 등)에
+`ipsi.isjung.com` 요청을 `http://192.168.0.7` 로 넘기는 설정을 추가하고, Cloudflare DNS 에
+`ipsi` CNAME `isjung.com` (프록시 켬) 레코드를 추가합니다.
+
+### 3. 업데이트 · 데이터 갱신
 ```bash
-cd /opt/isjung && sudo git pull && sudo bash admission/deploy/install.sh
+cd /opt/ipsi && sudo git pull && sudo bash admission/deploy/install.sh   # 코드 업데이트
+sudo bash /opt/ipsi/admission/deploy/update_data.sh                      # 데이터 수동 갱신
 ```
-
-### 4. 데이터 수동 갱신
-```bash
-sudo bash /opt/isjung/admission/deploy/update_data.sh
-```
-다운로드 → 가공 → 원문 링크 검사(404 등 없는 파일 제외) → 웹 반영 순서로 진행하며, 실패하면 기존 데이터를 유지합니다.
+매월 1일 새벽 자동 갱신이 등록됩니다(`/etc/cron.d/ipsi-data`, 로그 `/var/log/ipsi-data.log`).
+서버는 data.go.kr, jinhak.gne.go.kr 에 나가는 인터넷 연결이 필요합니다.
 
 ## 데이터 정의
 - **경쟁률** = 정원내 지원자 ÷ 정원내 모집인원 (수시·정시 합산, 대학알리미 공시 정의)
@@ -98,7 +81,7 @@ sudo bash /opt/isjung/admission/deploy/update_data.sh
 - 4년제 데이터에는 교육대학·산업대학·사이버대학 등 대학알리미 ‘대학’ 공시 대상이 포함됨 (목록에서 종류로 구분)
 
 ## 검색 노출 (네이버·구글) — 수익화 핵심
-설치 후 아래 두 곳에 사이트를 등록하고 `https://isjung.com/sitemap.xml` 을 제출하세요.
+설치 후 아래 두 곳에 사이트를 등록하고 `https://ipsi.isjung.com/sitemap.xml` 을 제출하세요.
 - 네이버 서치어드바이저: https://searchadvisor.naver.com (소유 확인용 HTML 파일을 받아 `/var/www/isjung.com/` 에 올리면 됩니다)
 - 구글 서치 콘솔: https://search.google.com/search-console
 
