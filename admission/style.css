@@ -214,3 +214,13 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 1
 .rtable .table-wrap { border: 0; margin-bottom: 12px; }
 .data-table tr.hit td { background: color-mix(in srgb, var(--ok) 14%, transparent); }
 .grade-hint { margin: 0; align-self: center; flex: 2 1 300px; }
+
+/* 대학 발표 입결 (원문 추출) */
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 12px; margin: 6px 0 12px; }
+.seg-btn { font: inherit; font-weight: 700; font-size: .88rem; border: 0; background: none; color: var(--muted); padding: 7px 12px; border-radius: 9px; cursor: pointer; }
+.seg-btn.is-active { background: var(--surface); color: var(--primary); box-shadow: var(--shadow); }
+.ipsi-t { margin-bottom: 18px; }
+.ipsi-cap { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-weight: 700; margin-bottom: 6px; }
+.ipsi-cap a { white-space: nowrap; font-weight: 600; }
+.ipsi-table thead th { text-align: center; white-space: normal; vertical-align: middle; position: static; border: 1px solid var(--line); min-width: 52px; }
+.ipsi-table td { border-right: 1px solid var(--line); }

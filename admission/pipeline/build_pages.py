@@ -46,7 +46,7 @@ def layout(title, desc, canonical, body, jsonld=None):
 <meta property="og:title" content="{e(title)}" />
 <meta property="og:description" content="{e(desc)}" />
 <meta property="og:url" content="{e(canonical)}" />
-<link rel="stylesheet" href="/style.css?v=3" />
+<link rel="stylesheet" href="/style.css?v=4" />
 {ld}
 </head>
 <body>
@@ -116,6 +116,28 @@ def univ_page(d, meta):
                  + "".join(f'<td class="num">{rate(x["y"][y][3]) if y in x["y"] else "-"}</td>' for y in years) + "</tr>")
     b.append('</tbody></table></div><p class="source">출처: 교육부 대학알리미 「신입생 충원 현황(대학·학과별)」 (공공누리 제1유형)</p></div>')
 
+    ip = os.path.join(DATA, "ipsi", f"{d['code']}.json")
+    if os.path.exists(ip):
+        ipsi = [x for x in json.load(open(ip, encoding="utf-8")) if x["tables"]]
+        seen = set()
+        b.append('<div class="card"><h2>대학 발표 입시결과 (원문 그대로)</h2><p class="muted small">대학이 발표한 입시결과 PDF의 표를 글자 그대로 옮겼습니다. '
+                 "모든 칸은 원문 텍스트와 자동 대조를 통과한 표만 싣고, 표마다 원문 쪽 링크를 달았습니다. 성적 기준(최초합/최종등록, 50%·70% 컷, 평균)은 표 머리글을 확인하세요.</p>")
+        for x in ipsi:
+            key = (x["season"], x["campus"])
+            if key in seen:  # 전형 시기별 최신 학년도만
+                continue
+            seen.add(key)
+            b.append(f'<h3>{x["year"]}학년도 {e(x["season"])} 입시결과{(" · " + e(x["campus"])) if x["campus"] else ""} '
+                     f'<a class="small" href="{e(x["url"])}" target="_blank" rel="noopener">원문 PDF ↗</a></h3>')
+            for t in x["tables"]:
+                b.append(f'<p class="ipsi-cap"><span>{e(t["title"] or "표")}</span> <a class="small" href="{e(x["url"])}#page={t["page"]}" target="_blank" rel="noopener">원문 {t["page"]}쪽 ↗</a></p>'
+                         '<div class="table-wrap"><table class="data-table compact ipsi-table"><thead>'
+                         + "".join("<tr>" + "".join(f'<th colspan="{c[2]}" rowspan="{c[3]}">{e(c[0])}</th>' for c in row) + "</tr>" for row in t["head"])
+                         + "</thead><tbody>"
+                         + "".join("<tr>" + "".join(f'<td class="num">{e(v)}</td>' if j else f"<td><b>{e(v)}</b></td>" for j, v in enumerate(r)) + "</tr>" for r in t["rows"])
+                         + "</tbody></table></div>")
+        b.append('<p class="source">출처: 각 대학 발표 입시결과 원문 (경상남도교육청 경남대입정보센터 수집본)</p></div>')
+
     for r in d.get("resultData") or []:
         b.append(f'<div class="card"><h2>{e(r["title"])} <span class="tag tag-c">대학 공개 원자료</span></h2><p class="muted small">{e(r["note"])}</p>')
         for t in r["tables"]:
@@ -154,7 +176,7 @@ def univ_page(d, meta):
     canonical = f"{SITE}/u/{d['code']}.html"
     ld = {"@context": "https://schema.org", "@type": "CollegeOrUniversity", "name": d["name"], "url": d.get("homepage") or canonical,
           "address": {"@type": "PostalAddress", "addressRegion": d["region"], "addressCountry": "KR"}}
-    title = f"{name} 학과별 경쟁률 {len(years)}년 추이·입시결과 | 입시나침반"
+    title = f"{name} 입결·학과별 경쟁률 {len(years)}년 추이 | 입시나침반"
     return layout(title, desc, canonical, "\n".join(b), ld)
 
 

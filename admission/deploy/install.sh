@@ -15,7 +15,10 @@ if [ "$(id -u)" -ne 0 ]; then echo "sudo 로 실행하세요."; exit 1; fi
 
 echo "[1/5] 패키지 설치"
 apt-get update -y
-apt-get install -y nginx python3 rsync
+apt-get install -y nginx python3 python3-venv rsync
+# 입결 PDF 표 추출용 파이썬 환경
+[ -x /opt/ipsi-venv/bin/python ] || python3 -m venv /opt/ipsi-venv
+/opt/ipsi-venv/bin/pip install -q --upgrade pdfplumber
 [ "${CERTBOT:-0}" = "1" ] && apt-get install -y certbot python3-certbot-nginx
 
 echo "[2/5] 검색용 페이지 생성 (주소: https://${DOMAIN})"

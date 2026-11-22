@@ -273,6 +273,7 @@
         '<div class="detail-head"><div><h1>' + esc(d.name) + campusTag(d) + '</h1><p class="muted">' + esc([d.region, d.found, d.kind, d.area].filter(Boolean).join(" · ")) +
         (d.homepage ? ' · <a href="' + esc(d.homepage) + '" target="_blank" rel="noopener">홈페이지</a>' : "") + "</p></div>" +
         '<div class="kpis">' + kpi(d.lastYear + " 정원내 모집", fmtInt(d.recruit) + "명") + kpi("경쟁률", fmtRate(d.rate)) + kpi("신입생 충원율", fmtPct(d.fill)) + kpi("모집 학과", d.depts + "개") + "</div></div>" +
+        '<div id="ipsiBox"></div>' +
         '<div class="card"><h2>대학 전체 경쟁률 추이</h2>' + lineChart(tot, { label: "대학 전체 경쟁률", unit: ":1" }) +
         '<div class="table-wrap"><table class="data-table compact"><thead><tr><th>학년도</th>' + tot.map(function (t) { return '<th class="num">' + t.k + "</th>"; }).join("") +
         "</tr></thead><tbody><tr><th>정원내 모집</th>" + tot.map(function (t) { return '<td class="num">' + (t.r ? fmtInt(t.r) : "-") + "</td>"; }).join("") +
@@ -293,6 +294,7 @@
         '<div class="card">' + docsSection(d) + "</div></section>";
 
       bindResults();
+      loadIpsi(d);
       var open = null;
       function render() {
         var rows = d.departments.filter(function (x) {
@@ -595,6 +597,73 @@
       "<li>원문 자료의 학년도는 PDF 표지를 확인해 바로잡았습니다(입시결과는 다음 해 봄에 발표).</li>" +
       "<li>4년제 데이터에는 교육대학·산업대학·사이버대학 등 대학알리미 ‘대학’ 공시 대상이 포함됩니다.</li></ul></div>" +
       '<div class="card"><h2>오류 신고</h2><p>수치가 원자료와 다르면 해당 화면 주소와 함께 알려주세요. 원자료와 대조해 즉시 수정합니다.</p></div></section>';
+  }
+
+  /* ---------- 대학 발표 입결 (원문 PDF 표 추출) ---------- */
+  var IPSI = null;
+  function ipsiTable(t, url, open) {
+    var head = t.head.map(function (row) {
+      return "<tr>" + row.map(function (c) {
+        return '<th colspan="' + c[2] + '" rowspan="' + c[3] + '">' + esc(c[0]) + "</th>";
+      }).join("") + "</tr>";
+    }).join("");
+    var body = t.rows.map(function (r) {
+      return '<tr data-s="' + esc(r.join(" ")) + '">' + r.map(function (v, j) {
+        return j === 0 ? "<td><b>" + esc(v) + "</b></td>" : '<td class="num">' + esc(v) + "</td>";
+      }).join("") + "</tr>";
+    }).join("");
+    return '<details class="ipsi-t rtable"' + (open ? " open" : "") + '><summary class="ipsi-cap"><span>' + esc(t.title || "표") + '</span> <a href="' + esc(url) + "#page=" + t.page +
+      '" target="_blank" rel="noopener" class="small">원문 ' + t.page + "쪽 ↗</a></summary>" +
+      '<div class="table-wrap"><table class="data-table compact ipsi-table"><thead>' + head + "</thead><tbody>" + body + "</tbody></table></div></details>";
+  }
+  function loadIpsi(d) {
+    var box = $("#ipsiBox");
+    if (!box) return;
+    (IPSI ? Promise.resolve(IPSI) : getJSON("data/ipsi_index.json").catch(function () { return { tables: {} }; })).then(function (ix) {
+      IPSI = ix;
+      if (!ix.tables || !ix.tables[d.code]) return null;
+      return getJSON("data/ipsi/" + d.code + ".json");
+    }).then(function (docs) {
+      if (!docs) return;
+      docs = docs.filter(function (x) { return x.tables.length; });
+      var tabs = docs.map(function (x, i) {
+        return '<button type="button" class="seg-btn' + (i ? "" : " is-active") + '" data-i="' + i + '">' + x.year + "학년도 " + esc(x.season) + (x.campus && docs.some(function (y) { return y.campus !== x.campus; }) ? " · " + esc(x.campus) : "") + "</button>";
+      }).join("");
+      box.innerHTML = '<div class="card ipsi-card"><h2>대학 발표 입시결과 <span class="tag tag-c">원문 그대로</span></h2>' +
+        '<p class="muted small">대학이 발표한 입시결과 PDF의 표를 글자 그대로 옮겼습니다(계산·보정 없음). 모든 칸은 원문 텍스트와 자동 대조를 통과한 표만 싣고, 표마다 원문 쪽 링크를 달았습니다. ' +
+        "성적 기준(최초합/최종등록, 50%·70% 컷, 평균 등)은 대학마다 다르니 표 머리글을 꼭 확인하세요.</p>" +
+        '<div class="seg ipsi-tabs">' + tabs + "</div>" +
+        '<div class="toolbar"><label>모집단위·전형 검색<input type="search" id="ipsiQ" placeholder="예: 간호, 논술, 교과" /></label></div>' +
+        '<div id="ipsiBody"></div><p class="source">출처: 각 대학 발표 입시결과 원문 (경상남도교육청 경남대입정보센터 수집본)</p></div>';
+      var cur = 0;
+      function render() {
+        var x = docs[cur], q = $("#ipsiQ").value.trim();
+        var html = '<p class="small"><a href="' + esc(x.url) + '" target="_blank" rel="noopener">' + x.year + "학년도 " + esc(x.season) + " 입시결과 원문 PDF 전체 보기 ↗</a></p>" +
+          x.tables.map(function (t, i) { return ipsiTable(t, x.url, !q && i < 2); }).join("");
+        $("#ipsiBody").innerHTML = html;
+        if (q) {
+          $all("#ipsiBody .ipsi-t").forEach(function (el) {
+            var titleHit = el.querySelector(".ipsi-cap span").textContent.indexOf(q) >= 0;
+            var any = false;
+            $all("tbody tr", el).forEach(function (tr) {
+              var hit = titleHit || tr.getAttribute("data-s").indexOf(q) >= 0;
+              tr.hidden = !hit; any = any || hit;
+            });
+            el.hidden = !any;
+            el.open = any;
+          });
+        }
+      }
+      $all(".ipsi-tabs .seg-btn", box).forEach(function (b) {
+        b.addEventListener("click", function () {
+          cur = +b.getAttribute("data-i");
+          $all(".ipsi-tabs .seg-btn", box).forEach(function (y) { y.classList.toggle("is-active", y === b); });
+          render();
+        });
+      });
+      $("#ipsiQ").addEventListener("input", render);
+      render();
+    }).catch(function () { /* 입결 없음 */ });
   }
 
   /* ---------- 시작 ---------- */
