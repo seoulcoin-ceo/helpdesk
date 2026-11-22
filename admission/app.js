@@ -130,42 +130,73 @@
   }
 
   /* ---------- 홈 ---------- */
+  var ICON = {
+    dash: '<svg viewBox="0 0 24 24"><path d="M3 13h8V3H3zm0 8h8v-6H3zm10 0h8V11h-8zm0-18v6h8V3z"/></svg>',
+    fit: '<svg viewBox="0 0 24 24"><path d="M12 3 1 9l11 6 9-4.9V17h2V9zM5 13.2v4L12 21l7-3.8v-4L12 17z"/></svg>',
+    chance: '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-2h2zm0-4h-2V7h2z"/></svg>',
+    major: '<svg viewBox="0 0 24 24"><path d="M4 6H2v14a2 2 0 0 0 2 2h14v-2H4zm16-4H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-1 9H9V9h10zm-4 4H9v-2h6zm4-8H9V5h10z"/></svg>',
+    guide: '<svg viewBox="0 0 24 24"><path d="M21 5c-1.1-.4-2.3-.5-3.5-.5-2 0-4.1.4-5.5 1.5-1.4-1.1-3.5-1.5-5.5-1.5S2.4 4.9 1 6v14.6c0 .3.3.5.5.5h.3c1.3-.7 3.2-1.1 4.7-1.1 2 0 4.1.4 5.5 1.5 1.3-.8 3.8-1.5 5.5-1.5 1.6 0 3.3.3 4.7 1.1h.3c.3 0 .5-.2.5-.5V6c-.6-.4-1.2-.7-2-1zm0 13.5c-1.1-.3-2.3-.5-3.5-.5-1.7 0-4.2.7-5.5 1.5V8c1.3-.8 3.8-1.5 5.5-1.5 1.2 0 2.4.2 3.5.5z"/></svg>',
+    lock: '<svg viewBox="0 0 24 24"><path d="M18 8h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9zm9 14H6V10h12z"/></svg>'
+  };
+  function feature(icon, href, title, text, badge) {
+    return '<a class="feature-card" href="' + href + '"><span class="f-icon">' + ICON[icon] + "</span><h3>" + esc(title) +
+      (badge ? ' <span class="tag tag-c">' + esc(badge) + "</span>" : "") + "</h3><p>" + esc(text) + '</p><span class="f-more">바로가기 →</span></a>';
+  }
   function pageHome() {
     var m = IDX.meta;
     var u = IDX.univ.filter(function (x) { return x.kind === "대학교"; });
     var top = u.filter(function (x) { return x.lastYear === m.univYears[1] && x.recruit >= 1000; })
       .sort(function (a, b) { return b.rate - a.rate; }).slice(0, 10);
+    var s = load(), gpa = s.gpa || { system: "9", rows: [] }, avg = allAvg(gpa.rows || [], gpa.system);
+    var month = new Date().getMonth() + 1;
+    var startHref = ME ? "#/my" : "#/signup";
     view.innerHTML =
-      '<section class="hero"><div class="hero-inner">' +
-      '<p class="eyebrow">교육부·대교협·전문대교협 공식 공시 데이터</p>' +
-      "<h1>추정치 말고,<br />공시된 숫자로 보는 대학 입시</h1>" +
-      '<p class="lead">전국 4년제 대학 ' + IDX.univ.length + "곳의 학과별 " + m.univYears[0] + "~" + m.univYears[1] + "학년도 " +
-      (m.univYears[1] - m.univYears[0] + 1) + "개년 모집·지원·경쟁률·충원율과 전문대학 " + IDX.college.length +
-      "곳의 전형별 경쟁률, 각 대학이 직접 발표한 입시결과 원문을 한곳에 모았습니다.</p>" +
-      '<form class="search-big" id="homeSearch" role="search">' +
+      '<section class="hero2"><div class="hero2-grid">' +
+      '<div class="hero2-copy"><p class="eyebrow">교육부·대교협 공식 공시 10년 데이터 · 무료</p>' +
+      "<h1>고1부터 고3까지,<br />우리 아이 대입을<br /><em>데이터로</em> 준비하세요</h1>" +
+      '<p class="lead">내신·모의고사 추이 관리부터 <b>지금 내신으로 갈 수 있는 대학</b>, 등급이 낮아도 갈 수 있는 4년제까지. 추정치가 아닌 공식 자료로 보여 드립니다.</p>' +
+      '<div class="hero2-cta"><a class="btn btn-primary btn-lg" href="' + startHref + '">' + (ME ? "내 대시보드 열기" : "무료로 시작하기") + '</a><a class="btn btn-ghost btn-lg" href="#/guide?s=strategy">입시 전략 보기</a></div>' +
+      '<ul class="hero2-points"><li>전국 4년제 ' + IDX.univ.length + "곳 · 학과별 " + (m.univYears[1] - m.univYears[0] + 1) + "년 통계</li><li>학부모-자녀 계정 연결</li><li>성적은 암호화된 내 계정에만 저장</li></ul></div>" +
+      '<form class="hero2-tool card" id="quickFit"><h2>내 내신으로 갈 수 있는 대학</h2><p class="muted small">평균 등급만 넣으면 대학별 공식 교과전형 합격선과 비교해 안정·적정·소신으로 나눠 드립니다.</p>' +
+      '<div class="qf-row"><label>내신 평균<input name="grade" type="number" step="0.01" min="1" max="9" placeholder="예: 3.2" required value="' + (avg || "") + '" /></label>' +
+      '<label>등급제<select name="scale"><option value="9">9등급</option><option value="5"' + (gpa.system === "5" ? " selected" : "") + ">5등급</option></select></label></div>" +
+      '<button class="btn btn-primary btn-block" type="submit">갈 수 있는 대학 찾기</button>' +
+      '<p class="muted small center">지금은 회원 무료 공개 중</p></form></div></section>' +
+
+      '<section class="section"><div class="feature-grid">' +
+      feature("dash", "#/my", "우리 아이 대시보드", "학기별 내신·모의고사 추이와 학년·월별로 지금 해야 할 일을 한 화면에서.", "고1·고2") +
+      feature("fit", "#/fit", "내신으로 갈 수 있는 대학", "대학이 공개한 교과전형 합격선과 내 등급을 비교해 안정·적정·소신으로.") +
+      feature("chance", "#/chance", "4년제 기회 찾기", "등급이 낮아도 갈 수 있는 4년제. 미달이 예상되는 대학·학과를 10년 자료로 예측.") +
+      feature("major", "#/careers", "학과·진로", "무엇을 배우고 어떤 일을 하는지, 고교 때 들으면 좋은 과목까지 학과군별로.") +
+      "</div></section>" +
+
+      '<section class="section band"><div class="band-grid"><div><p class="eyebrow">이번 달 할 일</p><h2>' + month + "월, 학년별로 지금 챙길 것</h2>" +
+      '<p class="muted">로그인하면 체크하며 관리할 수 있고, 학부모와 함께 볼 수 있습니다.</p><a class="btn btn-primary" href="' + startHref + '">대시보드에서 관리하기</a></div>' +
+      '<div class="todo-cols">' + ["고1", "고2", "고3"].map(function (g) {
+        var t = (TODO[g] || {})[month] || [];
+        return '<div class="todo-col"><h3>' + g + "</h3>" + (t.length ? '<ul class="plain">' + t.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>" : '<p class="muted small">특별한 일정 없음</p>') + "</div>";
+      }).join("") + "</div></div></section>" +
+
+      '<section class="section"><form class="search-big" id="homeSearch" role="search">' +
       '<input type="search" name="q" placeholder="대학명 또는 학과명 (예: 연세대, 간호학과)" aria-label="대학 또는 학과 검색" autocomplete="off" />' +
       '<button class="btn btn-primary" type="submit">검색</button></form>' +
       '<div class="hero-stats">' +
-      stat("4년제 대학", IDX.univ.length + "개교") + stat("학과 수(" + m.univYears[1] + ")", fmtInt(u.reduce(function (s, x) { return s + x.depts; }, 0)) + "개") +
-      stat("공시 기간", (m.univYears[1] - m.univYears[0] + 1) + "개년") + stat("전문대학", IDX.college.length + "개교") +
-      "</div></div></section>" +
-
-      '<section class="section"><div class="grid-3">' +
-      card("#/chance", "4년제 기회 찾기", "등급이 낮아도 갈 수 있는 4년제: 최근 미달이 이어져 합격 가능성이 높은 대학·학과를 10년 공시 자료로 예측.") +
-      card("#/univ", "4년제 대학", "대학별·학과별 10개년 모집인원, 지원자, 경쟁률, 충원율 추이와 대학 공식 입시결과·모집요강 원문.") +
-      card("#/college", "전문대학", "전문대학 학과별 일반전형·일반고·특성화고 등 전형별 모집·지원·경쟁률.") +
-      card("#/dept", "학과 찾기·학과 정보", "가고 싶은 학과를 개설한 전국 대학을 경쟁률·모집인원 순으로 비교.") +
-      card("#/calc", "내 성적", "내신·모의고사·수능 가채점/실채점·검정고시 성적 입력, 수능 최저 충족 확인, 시험별 등급 추이.") +
-      card("#/guide", "입시 가이드", "수시·정시 구조, 공식 입시결과 읽는 법, 학년도별 체크포인트.") +
-      card("#/data", "데이터 출처", "모든 수치의 원출처, 갱신일, 용어 정의를 투명하게 공개합니다.") +
-      "</div></section>" +
+      stat("4년제 대학", IDX.univ.length + "개교") + stat("학과 수(" + m.univYears[1] + ")", fmtInt(u.reduce(function (a, x) { return a + x.depts; }, 0)) + "개") +
+      stat("공시 기간", (m.univYears[1] - m.univYears[0] + 1) + "개년") + stat("전문대학", IDX.college.length + "개교") + "</div></section>" +
 
       '<section class="section"><h2>' + m.univYears[1] + "학년도 경쟁률 상위 대학 <small class=\"muted\">(정원내 모집 1,000명 이상)</small></h2>" +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th>순위</th><th>대학</th><th>지역</th><th class="num">정원내 모집</th><th class="num">경쟁률</th></tr></thead><tbody>' +
       top.map(function (x, i) {
         return '<tr class="link-row" data-href="#/univ/' + esc(x.code) + '"><td>' + (i + 1) + '</td><td><a href="#/univ/' + esc(x.code) + '">' + esc(x.name) +
           "</a>" + campusTag(x) + "</td><td>" + esc(x.region) + '</td><td class="num">' + fmtInt(x.recruit) + '</td><td class="num"><b>' + fmtRate(x.rate) + "</b></td></tr>";
-      }).join("") + "</tbody></table></div>" + sourceNote(SRC_UNIV) + "</section>";
+      }).join("") + "</tbody></table></div>" + sourceNote(SRC_UNIV) + "</section>" +
+
+      '<section class="section"><h2>자주 묻는 질문</h2><div class="faq">' +
+      faq("정말 무료인가요?", "대학·학과 통계, 대시보드, 성적·학생부·상담 기록, 4년제 기회 찾기, 입시 전략·가이드는 모두 무료입니다. ‘내신으로 갈 수 있는 대학’도 지금은 회원에게 무료로 공개하고 있습니다.") +
+      faq("아이 성적을 넣어도 안전한가요?", "로그인하지 않으면 성적은 이 기기 브라우저에만 저장되고 서버로 가지 않습니다. 로그인하면 암호화된 연결(HTTPS)로 내 계정에만 저장되며, 운영자도 볼 수 없습니다. 탈퇴하면 즉시 모두 삭제됩니다.") +
+      faq("숫자는 어디서 오나요?", "교육부 대학알리미 공시, 한국전문대학교육협의회 통계, 각 대학이 직접 발표한 입시결과 원문입니다. 모든 화면에 출처를 표시하고 원문 링크를 답니다.") +
+      faq("합격을 보장하나요?", "아닙니다. 지난 공식 결과와 비교한 참고 자료입니다. 지원 전에는 반드시 대학의 최신 모집요강을 확인하세요.") +
+      "</div></section>";
 
     $("#homeSearch").addEventListener("submit", function (e) {
       e.preventDefault();
@@ -174,8 +205,13 @@
       var hitU = IDX.univ.concat(IDX.college).filter(function (x) { return x.name.indexOf(q) >= 0; });
       location.hash = hitU.length ? "#/univ?q=" + encodeURIComponent(q) : "#/dept?q=" + encodeURIComponent(q);
     });
+    $("#quickFit").addEventListener("submit", function (e) {
+      e.preventDefault();
+      location.hash = "#/fit?grade=" + encodeURIComponent(this.grade.value) + "&scale=" + this.scale.value;
+    });
     bindRows();
   }
+  function faq(q, a) { return "<details><summary>" + esc(q) + "</summary><p>" + esc(a) + "</p></details>"; }
   function stat(label, value) { return '<div class="hstat"><strong>' + esc(value) + "</strong><span>" + esc(label) + "</span></div>"; }
   function card(href, title, text) { return '<a class="card feature" href="' + href + '"><h3>' + esc(title) + "</h3><p>" + esc(text) + "</p></a>"; }
   function campusTag(x) { return x.campus && x.campus !== "본교" ? ' <span class="tag">' + esc(x.campus) + "</span>" : ""; }
@@ -1687,6 +1723,7 @@
   function pageFit(q) {
     return refreshMe().then(function () {
       var s = load(), gpa = s.gpa || { system: "9", rows: [] }, avg = allAvg(gpa.rows || [], gpa.system);
+      if (q.get("grade")) { avg = num(q.get("grade")); gpa = { system: q.get("scale") === "5" ? "5" : "9" }; }
       var regions = uniq(IDX.univ.map(function (u) { return u.region; })).sort();
       view.innerHTML = '<section class="section"><div class="section-head"><h1>내신으로 갈 수 있는 대학</h1>' +
         "<p>내 내신 평균등급을 대학이 공식 발표한 <b>교과전형 합격선</b>(70% 컷 등 대학이 공개한 기준)과 비교해 <b>안정·적정·소신</b>으로 나눠 보여 줍니다.</p></div>" +
