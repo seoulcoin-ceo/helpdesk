@@ -46,7 +46,7 @@ def layout(title, desc, canonical, body, jsonld=None):
 <meta property="og:title" content="{e(title)}" />
 <meta property="og:description" content="{e(desc)}" />
 <meta property="og:url" content="{e(canonical)}" />
-<link rel="stylesheet" href="/style.css?v=2" />
+<link rel="stylesheet" href="/style.css?v=3" />
 {ld}
 </head>
 <body>
@@ -115,6 +115,15 @@ def univ_page(d, meta):
         b.append(f"<tr><td>{e(x['college'])}</td><td><b>{e(label)}</b></td><td class=\"num\">{num(v[1])}</td><td class=\"num\">{num(v[2])}</td>"
                  + "".join(f'<td class="num">{rate(x["y"][y][3]) if y in x["y"] else "-"}</td>' for y in years) + "</tr>")
     b.append('</tbody></table></div><p class="source">출처: 교육부 대학알리미 「신입생 충원 현황(대학·학과별)」 (공공누리 제1유형)</p></div>')
+
+    for r in d.get("resultData") or []:
+        b.append(f'<div class="card"><h2>{e(r["title"])} <span class="tag tag-c">대학 공개 원자료</span></h2><p class="muted small">{e(r["note"])}</p>')
+        for t in r["tables"]:
+            b.append(f'<h3>{e(t["title"])}</h3><div class="table-wrap"><table class="data-table compact"><thead><tr>'
+                     + "".join(f'<th{" class=\"num\"" if j else ""}>{e(c)}</th>' for j, c in enumerate(t["cols"])) + "</tr></thead><tbody>"
+                     + "".join("<tr>" + "".join(f'<td class="num">{e(v)}</td>' if j else f"<td><b>{e(v)}</b></td>" for j, v in enumerate(row)) + "</tr>" for row in t["rows"])
+                     + "</tbody></table></div>")
+        b.append(f'<p class="source">출처: <a href="{e(r["url"])}" rel="noopener" target="_blank">{e(r["source"])}</a> (공공데이터포털, {e(r["license"])})</p></div>')
 
     docs = d.get("documents") or []
     b.append('<div class="card"><h2>대학 공식 입시결과·모집요강 원문</h2><p class="muted">대학이 직접 발표한 PDF입니다. '

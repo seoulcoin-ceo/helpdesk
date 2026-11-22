@@ -27,6 +27,11 @@ SOURCES = {
                 "name": "한국전문대학교육협의회 신입생 입시통계현황", "url": "https://www.data.go.kr/data/15068974/fileData.do", "license": "이용허락범위 제한 없음"},
     "links": {"pk": "15135448", "dpk": "uddi:2258a71d-5093-4fa0-8f0d-eff097f80313", "file": "gne_univ_docs.csv", "enc": "utf-8-sig",
               "name": "경상남도교육청 경남대입정보센터 연도별 대학정보", "url": "https://www.data.go.kr/data/15135448/fileData.do", "license": "이용허락범위 제한 없음"},
+    # 대학이 공공데이터포털에 직접 개방한 입시결과 (합격자 성적 포함)
+    "jbnu": {"pk": "15156696", "dpk": "uddi:f8fda4ca-d9f6-4428-b100-ff882eb325a8", "file": "jbnu_ipsi.csv", "enc": "cp949",
+             "name": "전북대학교 입시정보(수시·정시·편입학)", "url": "https://www.data.go.kr/data/15156696/fileData.do", "license": "이용허락범위 제한 없음"},
+    "koreatech": {"pk": "3074241", "dpk": "uddi:a022d647-7aa7-4c54-8dfd-e7fefb34b1ee", "file": "koreatech_ipsi.csv", "enc": "cp949",
+                  "name": "한국기술교육대학교 입시현황", "url": "https://www.data.go.kr/data/3074241/fileData.do", "license": "이용허락범위 제한 없음"},
 }
 DOC_BASE = "https://jinhak.gne.go.kr"
 UA = {"User-Agent": "Mozilla/5.0 (ipsi-compass data builder)"}
@@ -184,8 +189,59 @@ def docs_for(docs, name, kind):
     return [{k: v for k, v in e.items() if k != "type"} for e in lst]
 
 
+# ---------------- 대학 직접 공개 입결 ----------------
+def _src(key):
+    x = SOURCES[key]
+    return {"source": x["name"], "url": x["url"], "license": x["license"]}
+
+
+def build_results():
+    """대학명 -> 결과 블록 목록. 원자료의 열 이름과 값을 바꾸지 않는다."""
+    out = {}
+    # 전북대학교: 최근 결과 연도의 수시·정시 (편입학 제외)
+    try:
+        r = rows("jbnu")
+    except FileNotFoundError:
+        r = []
+    has = [x for x in r if any((x.get(c) or "").strip() for c in ("경쟁률", "학생부등급평균", "수능국어영역평균등급"))]
+    if has:
+        y = max(x["연도"] for x in has)
+        cand = [("모집인원", 1), ("지원인원", 1), ("등록인원", 1), ("경쟁률", 1), ("학생부등급평균", 1), ("수능국어영역평균등급", 1),
+                ("수능수학영역평균등급", 1), ("수능탐구영역평균등급", 1), ("수능영어영역평균등급", 1), ("수능한국사영역평균등급", 1), ("전형총점평균", 1)]
+        groups = {}
+        for x in has:
+            if x["연도"] != y or x["모집시기"] == "편입학":
+                continue
+            groups.setdefault((x["모집시기"], x["전형유형"], x["전형명칭"]), []).append(x)
+        order = {"수시모집": 0, "기간자율화": 1, "기간자율화.2차": 2, "정시모집": 3}
+        tables = []
+        tord = {"학생부교과": 0, "학생부종합": 1, "수능위주": 2, "실기실적": 3}
+        main = lambda n: 0 if ("일반학생" in n and "예체능" not in n) or n == "큰사람" else 1
+        for (season, typ, name), lst in sorted(groups.items(), key=lambda kv: (order.get(kv[0][0], 9), tord.get(kv[0][1], 9), main(kv[0][2]), kv[0][2])):
+            cols = [c for c, _ in cand if any((x.get(c) or "").strip() for x in lst)]
+            tables.append({"title": f"{season} · {typ} · {name}", "cols": ["모집단위"] + cols,
+                           "rows": [[x["모집단위"]] + [(x.get(c) or "").strip() or "-" for c in cols] for x in lst],
+                           "grade": cols.index("학생부등급평균") + 1 if "학생부등급평균" in cols else None})
+        out["전북대학교"] = [dict(_src("jbnu"), title=f"{y}학년도 전북대학교 공개 입시결과", tables=tables,
+                                  note="전북대학교가 공공데이터포털에 직접 공개한 원자료입니다. 등급·점수는 대학이 공개한 ‘평균’ 값이며 70% 컷이 아닙니다. "
+                                       "산출 대상(최초합격자/최종등록자 등)은 원자료에 명시되어 있지 않으므로 전북대학교 입학처 발표 자료와 함께 확인하세요.")]
+    # 한국기술교육대학교: 정시 입학성적 (원자료 표기 그대로)
+    try:
+        r = rows("koreatech")
+    except FileNotFoundError:
+        r = []
+    if r:
+        cols = list(r[0].keys())
+        out["한국기술교육대학교"] = [dict(_src("koreatech"), title="한국기술교육대학교 정시 신입생 입학성적", tables=[{
+            "title": "정시 입학성적 (원자료 열 이름 그대로)", "cols": cols, "rows": [[(x.get(c) or "").strip() or "-" for c in cols] for x in r], "grade": None}],
+            note="한국기술교육대학교가 공개한 ‘정시 신입생 입학성적’ 원자료입니다(대학 설명: 학부(과)별 백분율). "
+                 "산출 방식(평균/컷, 반영 영역)은 원자료에 명시되어 있지 않아 대학 입학처 확인이 필요합니다.")]
+    return out
+
+
 # ---------------- 4년제 ----------------
-def build_univ(raw, docs, homepages):
+def build_univ(raw, docs, homepages, results=None):
+    results = results or {}
     years = sorted({int(r["기준연도"]) for r in raw})[-YEARS:]
     y0 = years[0]
     schools = {}
@@ -241,9 +297,11 @@ def build_univ(raw, docs, homepages):
         meta = {"code": code, "name": s["name"], "campus": s["campus"], "kind": s["kind"], "found": s["found"],
                 "region": s["region"], "area": s["area"], "lastYear": last_year, "recruit": rec,
                 "rate": round(app / rec, 1) if rec else None, "fill": round(ent / rec * 100, 1) if rec and ent else None,
-                "depts": len(cur), "docs": bool(docs_for(docs, s["name"], "4년제"))}
+                "depts": len(cur), "docs": bool(docs_for(docs, s["name"], "4년제")),
+                "results": bool(results.get(s["name"]) and s["campus"] == "본교")}
         index.append(meta)
-        detail = dict(meta, homepage=homepages.get(base_name(s["name"]), ""), departments=depts, documents=docs_for(docs, s["name"], "4년제"))
+        detail = dict(meta, homepage=homepages.get(base_name(s["name"]), ""), departments=depts, documents=docs_for(docs, s["name"], "4년제"),
+                      resultData=results.get(s["name"], []) if meta["results"] else [])
         with open(os.path.join(OUT, "univ", f"{code}.json"), "w", encoding="utf-8") as f:
             json.dump(detail, f, ensure_ascii=False, separators=(",", ":"))
         for x in cur:
@@ -312,7 +370,7 @@ def main():
     status = json.load(open(status_path, encoding="utf-8")) if os.path.exists(status_path) else None
     docs = apply_link_status(docs, status)
 
-    univ_index, dept_index, years = build_univ(rows("univ"), docs, homepages)
+    univ_index, dept_index, years = build_univ(rows("univ"), docs, homepages, build_results())
     college_index = build_college(rows("college"), docs, homepages)
     meta = {
         "built": time.strftime("%Y-%m-%d"),

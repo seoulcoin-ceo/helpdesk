@@ -207,3 +207,10 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 1
   .static-nav a { white-space: nowrap; padding: 6px 8px; font-size: .85rem; }
   .site-header:has(.static-nav) .nav-wrap { flex-direction: column; align-items: flex-start; padding: 8px 0; gap: 4px; }
 }
+
+/* 대학 공개 입결 */
+.rtable { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; background: var(--surface); }
+.rtable summary { cursor: pointer; font-weight: 700; padding: 10px 0; }
+.rtable .table-wrap { border: 0; margin-bottom: 12px; }
+.data-table tr.hit td { background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.grade-hint { margin: 0; align-self: center; flex: 2 1 300px; }

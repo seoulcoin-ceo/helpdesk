@@ -214,7 +214,7 @@
           (x._college ? ' <span class="tag tag-c">전문대</span>' : "") + (x.lastYear && x.lastYear < IDX.meta.univYears[1] ? ' <span class="tag tag-w">' + x.lastYear + "년까지 공시</span>" : "") +
           "</td><td>" + esc(x.region) + "</td><td>" + esc(x.found) + "</td>" + (isU ? "<td>" + esc(x.kind || "전문대학") + "</td>" : "") +
           '<td class="num">' + fmtInt(x.recruit) + '</td><td class="num"><b>' + fmtRate(x.rate) + '</b></td><td class="num">' + fmtPct(x.fill) + "</td><td>" +
-          (x.docs ? '<span class="ok">있음</span>' : '<span class="muted">-</span>') + "</td></tr>";
+          (x.docs ? '<span class="ok">있음</span>' : '<span class="muted">-</span>') + (x.results ? ' <span class="tag tag-c">입결 공개</span>' : "") + "</td></tr>";
       }).join("") || '<tr><td colspan="8" class="empty">조건에 맞는 대학이 없습니다.</td></tr>';
       bindRows();
     }
@@ -289,8 +289,10 @@
         '<div class="table-wrap"><table class="data-table"><thead><tr><th>단과대학</th><th>학과</th><th>계열</th><th class="num">모집</th><th class="num">지원</th><th class="num">경쟁률</th><th class="num">충원율</th><th>10년 추이</th></tr></thead>' +
         '<tbody id="deptBody"></tbody></table></div>' + sourceNote(SRC_UNIV) + "</div>" +
 
+        resultSection(d) +
         '<div class="card">' + docsSection(d) + "</div></section>";
 
+      bindResults();
       var open = null;
       function render() {
         var rows = d.departments.filter(function (x) {
@@ -335,6 +337,42 @@
       document.title = d.name + " 학과별 경쟁률·입시결과 | 입시나침반";
     });
   }
+  /* ---------- 대학 직접 공개 입결 ---------- */
+  function resultSection(d) {
+    if (!d.resultData || !d.resultData.length) return "";
+    return d.resultData.map(function (r) {
+      var hasGrade = r.tables.some(function (t) { return t.grade; });
+      return '<div class="card result-card"><h2>' + esc(r.title) + ' <span class="tag tag-c">대학 공개 원자료</span></h2>' +
+        '<p class="muted small">' + esc(r.note) + "</p>" +
+        (hasGrade ? '<div class="toolbar"><label>내 내신 평균등급 (9등급제)<input type="number" class="my-grade" min="1" max="9" step="0.01" inputmode="decimal" placeholder="예: 2.85" /></label>' +
+          '<p class="muted small grade-hint">입력하면 학생부등급 평균이 내 등급보다 낮거나 같은(내가 더 유리한) 모집단위를 표시합니다. 평균 비교일 뿐 합격 가능성을 뜻하지 않습니다.</p></div>' : "") +
+        r.tables.map(function (t, i) {
+          return '<details class="rtable"' + (i < 3 ? " open" : "") + '><summary>' + esc(t.title) + ' <span class="muted small">(' + t.rows.length + "개 모집단위)</span></summary>" +
+            '<div class="table-wrap"><table class="data-table compact"' + (t.grade ? ' data-grade="' + t.grade + '"' : "") + "><thead><tr>" +
+            t.cols.map(function (c, j) { return "<th" + (j ? ' class="num"' : "") + ">" + esc(c) + "</th>"; }).join("") + "</tr></thead><tbody>" +
+            t.rows.map(function (row) {
+              return "<tr>" + row.map(function (v, j) { return j ? '<td class="num">' + esc(v) + "</td>" : "<td><b>" + esc(v) + "</b></td>"; }).join("") + "</tr>";
+            }).join("") + "</tbody></table></div></details>";
+        }).join("") +
+        '<p class="source">출처: <a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.source) + "</a> (공공데이터포털, " + esc(r.license) + ")</p></div>";
+    }).join("");
+  }
+  function bindResults() {
+    $all(".my-grade").forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        var g = num(inp.value);
+        var card = inp.closest(".result-card");
+        $all("table[data-grade]", card).forEach(function (tb) {
+          var col = +tb.getAttribute("data-grade");
+          $all("tbody tr", tb).forEach(function (tr) {
+            var v = num(tr.children[col].textContent);
+            tr.classList.toggle("hit", g != null && g >= 1 && g <= 9 && v != null && g <= v);
+          });
+        });
+      });
+    });
+  }
+
   function kpi(label, value) { return '<div class="kpi"><span>' + esc(label) + "</span><strong>" + esc(value) + "</strong></div>"; }
 
   /* ---------- 전문대 상세 ---------- */
