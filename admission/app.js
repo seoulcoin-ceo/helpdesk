@@ -139,7 +139,7 @@
     lock: '<svg viewBox="0 0 24 24"><path d="M18 8h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9zm9 14H6V10h12z"/></svg>'
   };
   function feature(icon, href, title, text, badge) {
-    return '<a class="feature-card" href="' + href + '"><span class="f-icon">' + ICON[icon] + "</span><h3>" + esc(title) +
+    return '<a class="feature-card f-' + icon + '" href="' + href + '"><span class="f-icon">' + ICON[icon] + "</span><h3>" + esc(title) +
       (badge ? ' <span class="tag tag-c">' + esc(badge) + "</span>" : "") + "</h3><p>" + esc(text) + '</p><span class="f-more">바로가기 →</span></a>';
   }
   function pageHome() {
@@ -151,19 +151,26 @@
     var month = new Date().getMonth() + 1;
     var startHref = ME ? "#/my" : "#/signup";
     view.innerHTML =
-      '<section class="hero2"><div class="hero2-grid">' +
-      '<div class="hero2-copy"><p class="eyebrow">교육부·대교협 공식 공시 10년 데이터 · 무료</p>' +
+      '<section class="hero3"><div class="hero3-bg" aria-hidden="true"><svg viewBox="0 0 600 600"><defs><radialGradient id="hg" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#7d93ff" stop-opacity=".55"/><stop offset="1" stop-color="#7d93ff" stop-opacity="0"/></radialGradient></defs><circle cx="300" cy="300" r="300" fill="url(#hg)"/><g fill="none" stroke="#fff" stroke-opacity=".10"><circle cx="300" cy="300" r="120"/><circle cx="300" cy="300" r="200"/><circle cx="300" cy="300" r="280"/></g><path d="M300 110l46 190-46 190-46-190z" fill="#fff" fill-opacity=".07"/></svg></div>' +
+      '<div class="container hero3-grid">' +
+      '<div class="hero3-copy"><p class="pill">교육부·대교협 공식 공시 10년 데이터 · 무료</p>' +
       "<h1>고1부터 고3까지,<br />우리 아이 대입을<br /><em>데이터로</em> 준비하세요</h1>" +
-      '<p class="lead">내신·모의고사 추이 관리부터 <b>지금 내신으로 갈 수 있는 대학</b>, 등급이 낮아도 갈 수 있는 4년제까지. 추정치가 아닌 공식 자료로 보여 드립니다.</p>' +
-      '<div class="hero2-cta"><a class="btn btn-primary btn-lg" href="' + startHref + '">' + (ME ? "내 대시보드 열기" : "무료로 시작하기") + '</a><a class="btn btn-ghost btn-lg" href="#/guide?s=strategy">입시 전략 보기</a></div>' +
-      '<ul class="hero2-points"><li>전국 4년제 ' + IDX.univ.length + "곳 · 학과별 " + (m.univYears[1] - m.univYears[0] + 1) + "년 통계</li><li>학부모-자녀 계정 연결</li><li>성적은 암호화된 내 계정에만 저장</li></ul></div>" +
-      '<form class="hero2-tool card" id="quickFit"><h2>내 내신으로 갈 수 있는 대학</h2><p class="muted small">평균 등급만 넣으면 대학별 공식 교과전형 합격선과 비교해 안정·적정·소신으로 나눠 드립니다.</p>' +
+      '<p class="hero3-lead">내신·모의고사 추이 관리부터 <b>지금 내신으로 갈 수 있는 대학</b>, 등급이 낮아도 갈 수 있는 4년제까지. 추정치가 아닌 공식 자료로 보여 드립니다.</p>' +
+      '<div class="hero3-cta"><a class="btn btn-white btn-lg" href="' + startHref + '">' + (ME ? "내 대시보드 열기" : "무료로 시작하기") + ' →</a><a class="btn btn-line btn-lg" href="#/guide?s=strategy">입시 전략 보기</a></div>' +
+      '<div class="hero3-stats"><div><b data-count="' + IDX.univ.length + '">0</b><span>4년제 대학</span></div><div><b data-count="' + u.reduce(function (a, x) { return a + x.depts; }, 0) + '">0</b><span>학과</span></div><div><b data-count="' + (m.univYears[1] - m.univYears[0] + 1) + '">0</b><span>년 공시 자료</span></div><div><b data-count="' + IDX.college.length + '">0</b><span>전문대학</span></div></div></div>' +
+      '<div class="hero3-side"><form class="glass" id="quickFit"><p class="glass-eyebrow">30초 진단</p><h2>내 내신으로 갈 수 있는 대학</h2><p class="glass-sub">평균 등급만 넣으면 대학별 공식 교과전형 합격선과 비교해 드립니다.</p>' +
       '<div class="qf-row"><label>내신 평균<input name="grade" type="number" step="0.01" min="1" max="9" placeholder="예: 3.2" required value="' + (avg || "") + '" /></label>' +
       '<label>등급제<select name="scale"><option value="9">9등급</option><option value="5"' + (gpa.system === "5" ? " selected" : "") + ">5등급</option></select></label></div>" +
-      '<button class="btn btn-primary btn-block" type="submit">갈 수 있는 대학 찾기</button>' +
-      '<p class="muted small center">지금은 회원 무료 공개 중</p></form></div></section>' +
+      '<button class="btn btn-accent btn-block btn-lg" type="submit">갈 수 있는 대학 찾기</button>' +
+      '<div class="cat-chips" aria-hidden="true"><span class="c-safe">안정</span><span class="c-fit">적정</span><span class="c-reach">소신</span><small>으로 나눠 보여 드려요 · 지금은 회원 무료</small></div></form></div>' +
+      "</div></section>" +
 
-      '<section class="section"><div class="feature-grid">' +
+      '<section class="section steps-sec"><p class="eyebrow center">이렇게 씁니다</p><h2 class="sec-title center">세 단계면 우리 아이 위치가 보입니다</h2><ol class="steps3">' +
+      '<li><span class="n">1</span><h3>성적 입력</h3><p>내신·모의고사·수능, 검정고시까지. 학생부와 상담 기록도 함께.</p></li>' +
+      '<li><span class="n">2</span><h3>공식 자료와 비교</h3><p>대학이 발표한 합격선, 10년 경쟁률·충원율과 내 성적을 나란히.</p></li>' +
+      '<li><span class="n">3</span><h3>전략 세우기</h3><p>안정·적정·소신 조합, 이번 달 할 일, 등급이 낮을 때의 길까지.</p></li></ol></section>' +
+
+      '<section class="section"><p class="eyebrow center">핵심 기능</p><h2 class="sec-title center">입시의 모든 단계를 한곳에서</h2><div class="feature-grid">' +
       feature("dash", "#/my", "우리 아이 대시보드", "학기별 내신·모의고사 추이와 학년·월별로 지금 해야 할 일을 한 화면에서.", "고1·고2") +
       feature("fit", "#/fit", "내신으로 갈 수 있는 대학", "대학이 공개한 교과전형 합격선과 내 등급을 비교해 안정·적정·소신으로.") +
       feature("chance", "#/chance", "4년제 기회 찾기", "등급이 낮아도 갈 수 있는 4년제. 미달이 예상되는 대학·학과를 10년 자료로 예측.") +
@@ -180,9 +187,7 @@
       '<section class="section"><form class="search-big" id="homeSearch" role="search">' +
       '<input type="search" name="q" placeholder="대학명 또는 학과명 (예: 연세대, 간호학과)" aria-label="대학 또는 학과 검색" autocomplete="off" />' +
       '<button class="btn btn-primary" type="submit">검색</button></form>' +
-      '<div class="hero-stats">' +
-      stat("4년제 대학", IDX.univ.length + "개교") + stat("학과 수(" + m.univYears[1] + ")", fmtInt(u.reduce(function (a, x) { return a + x.depts; }, 0)) + "개") +
-      stat("공시 기간", (m.univYears[1] - m.univYears[0] + 1) + "개년") + stat("전문대학", IDX.college.length + "개교") + "</div></section>" +
+      "</section>" +
 
       '<section class="section"><h2>' + m.univYears[1] + "학년도 경쟁률 상위 대학 <small class=\"muted\">(정원내 모집 1,000명 이상)</small></h2>" +
       '<div class="table-wrap"><table class="data-table"><thead><tr><th>순위</th><th>대학</th><th>지역</th><th class="num">정원내 모집</th><th class="num">경쟁률</th></tr></thead><tbody>' +
@@ -204,6 +209,11 @@
       if (!q) return;
       var hitU = IDX.univ.concat(IDX.college).filter(function (x) { return x.name.indexOf(q) >= 0; });
       location.hash = hitU.length ? "#/univ?q=" + encodeURIComponent(q) : "#/dept?q=" + encodeURIComponent(q);
+    });
+    $all("[data-count]").forEach(function (el) {
+      var to = +el.getAttribute("data-count"), t0 = null;
+      var step = function (t) { t0 = t0 || t; var k = Math.min(1, (t - t0) / 900); el.textContent = fmtInt(Math.round(to * (1 - Math.pow(1 - k, 3)))); if (k < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
     });
     $("#quickFit").addEventListener("submit", function (e) {
       e.preventDefault();
